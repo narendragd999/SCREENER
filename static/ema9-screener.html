@@ -2096,7 +2096,14 @@ function renderBacktestResults(data) {
   if (data.all_trades && data.all_trades.length) {
     const skippedCount = (data.all_skipped || []).length;
     document.getElementById('btTradeCount').textContent = data.all_trades.length + ' trades';
-    document.getElementById('btSkippedCountBadge').textContent = skippedCount ? `(+${skippedCount} skipped)` : '';
+    document.getElementById('btSkippedCountBadge').textContent = `(${skippedCount} skipped)`;
+    // Disable toggle if nothing to show
+    const skipToggle = document.getElementById('btShowSkipped');
+    if (skipToggle) {
+      skipToggle.disabled = skippedCount === 0;
+      skipToggle.parentElement.style.opacity = skippedCount === 0 ? '0.35' : '1';
+      skipToggle.parentElement.title = skippedCount === 0 ? 'No skipped signals in this backtest — skipped signals only occur when a new breakout fires while already holding a trade' : '';
+    }
     renderBtTradesTable(data.all_trades, data.all_skipped || []);
     document.getElementById('btTradesSection').classList.remove('hidden');
   }
@@ -2228,8 +2235,15 @@ function renderBtTradesTable(trades, skippedTrades = []) {
   // Cache raw data so re-sorts don't need the original arrays
   _btAllTradesRaw = { trades, skipped: skippedTrades };
 
-  // Reset sort to default (date ascending) on fresh run
-  _btTradesSortKey = 'date_asc';
+  // Reset skipped toggle state on fresh run
+  const skipToggleReset = document.getElementById('btShowSkipped');
+  if (skipToggleReset) {
+    skipToggleReset.checked = false;
+    skipToggleReset.disabled = false;
+    skipToggleReset.parentElement.style.opacity = '1';
+    skipToggleReset.parentElement.title = '';
+  }
+  document.getElementById('btSkippedCountBadge').textContent = '';
   const sel = document.getElementById('btTradesSortSelect');
   if (sel) sel.value = 'date_asc';
 
