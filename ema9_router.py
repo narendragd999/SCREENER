@@ -11,6 +11,7 @@ Fixes applied IN ema9_router.py (without modifying sma_router.py):
 
 import os, io, asyncio, datetime as dt_module, time, math, logging
 from typing import Optional, List, Dict
+import httpx
 
 import numpy as np
 import pandas as pd
@@ -949,6 +950,42 @@ class Ema9ScreenRequest(BaseModel):
 # ─────────────────────────────────────────────────────────────
 #  SHARED SCREENING PIPELINE
 # ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+#  GOOGLE SHEETS LOGGER
+# ─────────────────────────────────────────────────────────────
+GSHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbz3Vj2-_xFkRhqXoySwxDyNZralsZ-XuZamHyuffo7INjtuNPNUSt4lxJg0aqOz7EAe/exec"
+
+async def _log_signals_to_gsheet(signals: list, prime_targets: list):
+    """Fire-and-forget: logs all scan signals to Google Sheets."""
+    if not signals:
+        return
+    prime_set = {s.get("ticker") for s in prime_targets}
+    scan_time = dt_module.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    rows = []
+    for s in signals:
+        rows.append({
+            "scan_time":       scan_time,
+            "ticker":          s.get("ticker", ""),
+            "price":           s.get("current_price", ""),
+            "fair_value":      s.get("composite_fair_price", ""),
+            "fv_gap_pct":      s.get("gap_to_fair_pct", ""),   # correct key from _enrich_fair_value
+            "trend":           s.get("trend_regime", ""),
+            "candles_ago":     s.get("candles_ago", ""),
+            "valuation":       s.get("valuation_bucket", ""),  # was grade (always empty)
+            "type":            "PRIME" if s.get("ticker") in prime_set else "OTHER",
+            "interval":        s.get("interval", ""),
+        })
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(GSHEET_WEBHOOK_URL, json=rows)
+            if resp.status_code == 200:
+                logger.info(f"[GSheet] Logged {len(rows)} signals successfully.")
+            else:
+                logger.warning(f"[GSheet] Unexpected response {resp.status_code}: {resp.text[:200]}")
+    except Exception as e:
+        logger.warning(f"[GSheet] Logging failed (non-blocking): {e}")
+
+
 async def _run_screen_pipeline(
     tickers: List[str],
     interval: str = "1d",
@@ -1030,6 +1067,11 @@ async def _run_screen_pipeline(
             prime_targets.append(sig)
         else:
             other_signals.append(sig)
+
+    # Step 5: GSheet logging is handled by chartink_watcher._log_primes_to_gsheet
+    # which pushes the FULL daily-accumulated prime set after every scan.
+    # The per-run logger below is intentionally disabled to avoid partial/duplicate rows.
+    # asyncio.create_task(_log_signals_to_gsheet(signals, prime_targets))
 
     return {
         "signals":             signals,

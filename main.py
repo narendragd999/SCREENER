@@ -637,18 +637,18 @@ def get_ce_historical_high(ticker: str, strike: float, expiry_str: str,
             f"&strikePrice={int(strike)}"
         )
         print(f"\n{'='*60}")
-        print(f"[{ticker}] NSE CE HIST URL:\n  {url}")
-        print(f"  expiry_str received : {expiry_str!r}")
-        print(f"  exp_nse formatted   : {exp_nse!r}")
-        print(f"  year                : {year}")
-        print(f"  strike (int)        : {int(strike)}")
-        print(f"  date range          : {start_dt} -> {end_dt}")
+        # print(f"[{ticker}] NSE CE HIST URL:\n  {url}")
+        # print(f"  expiry_str received : {expiry_str!r}")
+        # print(f"  exp_nse formatted   : {exp_nse!r}")
+        # print(f"  year                : {year}")
+        # print(f"  strike (int)        : {int(strike)}")
+        # print(f"  date range          : {start_dt} -> {end_dt}")
 
         time.sleep(random.uniform(1.0, 2.0))
         r = session.get(url, timeout=15)
 
-        print(f"[{ticker}] HTTP STATUS : {r.status_code}")
-        print(f"[{ticker}] RESPONSE (first 500 chars):\n  {r.text[:500]!r}")
+        # print(f"[{ticker}] HTTP STATUS : {r.status_code}")
+        # print(f"[{ticker}] RESPONSE (first 500 chars):\n  {r.text[:500]!r}")
 
         if r.status_code in (403, 429):
             print(f"[{ticker}] Blocked ({r.status_code}) -- resetting session")
@@ -662,7 +662,7 @@ def get_ce_historical_high(ticker: str, strike: float, expiry_str: str,
             return None, 1
 
         data = r.json()
-        print(f"[{ticker}] TOP-LEVEL KEYS : {list(data.keys())}")
+        # print(f"[{ticker}] TOP-LEVEL KEYS : {list(data.keys())}")
 
         rows = (
             data.get("data")
@@ -670,10 +670,10 @@ def get_ce_historical_high(ticker: str, strike: float, expiry_str: str,
             or data.get("records", {}).get("data")
             or []
         )
-        print(f"[{ticker}] ROWS COUNT : {len(rows)}")
-        if rows:
-            print(f"[{ticker}] FIRST ROW KEYS : {list(rows[0].keys())}")
-            print(f"[{ticker}] FIRST ROW DATA : {rows[0]}")
+        # print(f"[{ticker}] ROWS COUNT : {len(rows)}")
+        # if rows:
+        #     print(f"[{ticker}] FIRST ROW KEYS : {list(rows[0].keys())}")
+        #     print(f"[{ticker}] FIRST ROW DATA : {rows[0]}")
 
         if not rows:
             print(f"[{ticker}] Empty rows -- API returned no historical data")
@@ -697,7 +697,7 @@ def get_ce_historical_high(ticker: str, strike: float, expiry_str: str,
             except (ValueError, TypeError):
                 continue
 
-        print(f"[{ticker}] EXTRACTED LTPs : {ltps[:10]}{'...' if len(ltps)>10 else ''}")
+        # print(f"[{ticker}] EXTRACTED LTPs : {ltps[:10]}{'...' if len(ltps)>10 else ''}")
         if not ltps:
             print(f"[{ticker}] No valid LTP values")
             return None, 1
@@ -858,7 +858,7 @@ def check_surge_and_loss(ticker: str, cfg: Dict, job_id: str = "") -> Optional[D
                     f"(prev high Rs{lifetime_high:.2f} from "
                     f"{lth_exclude}-{lth_lookback}d window, buffer {lth_buffer}%)"
                 )
-                print(f"[FILTER] {msg}")
+                # print(f"[FILTER] {msg}")
                 if job_id:
                     job_log(job_id, msg, "fail")
                 return None
@@ -892,7 +892,7 @@ def check_surge_and_loss(ticker: str, cfg: Dict, job_id: str = "") -> Optional[D
                     f"price Rs{cur_p:.2f} >= {lth52_threshold:.2f} "
                     f"(52w high Rs{lifetime_52w_high:.2f}, buffer {lth52_buffer}%) — breakout mode"
                 )
-                print(f"[FILTER] {msg}")
+                # print(f"[FILTER] {msg}")
                 if job_id:
                     job_log(job_id, msg, "fail")
                 return None
@@ -999,7 +999,7 @@ def check_surge_and_loss(ticker: str, cfg: Dict, job_id: str = "") -> Optional[D
 
     if breakdown_idx is None:
         msg = f"{ticker} no valid breakdown candle in last {lookback_bd} sessions"
-        print(f"[FILTER] {msg}")
+        # print(f"[FILTER] {msg}")
         if job_id:
             job_log(job_id, msg, "fail")
         return None
@@ -1090,7 +1090,7 @@ def check_surge_and_loss(ticker: str, cfg: Dict, job_id: str = "") -> Optional[D
             f"{ticker} no continuous surge >={min_gain}% ending within "
             f"last {recency_days} sessions"
         )
-        print(f"[FILTER] {msg}")
+        # print(f"[FILTER] {msg}")
         if job_id:
             job_log(job_id, msg, "fail")
         return None
