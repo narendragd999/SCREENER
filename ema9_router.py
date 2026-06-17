@@ -475,8 +475,7 @@ def _backtest_ticker(
                     "trend_regime":  trend_at_entry,
                 })
                 in_trade = False
-            else:
-                continue  # Trade still open, no exit yet — skip signal search
+            # Trade still open — fall through to check for new breakout signals (record as skipped)
 
         # ── Look for new breakout signal ──────────────────────────────
         prev_close = float(df["Close"].iloc[i - 1])
