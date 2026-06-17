@@ -1,0 +1,100 @@
+Now let me quickly scan the index.html for the frontend structure.Good, I have a thorough understanding of both files. Let me now generate the report.Here's a full step-by-step breakdown of your screener — first a pipeline diagram, then the detailed report below it.---
+
+## NSE Momentum Loss Screener — Full Report
+
+### What the script does (thesis)
+
+The screener finds stocks that surged strongly, then broke down on high volume — making them candidates for a **short CE (call-sell)** options strategy. The logic: price is unlikely to recover above the breakdown resistance level, so selling a CE above that level generates theta decay profit.
+
+---
+
+### Stage-by-stage logic
+
+**Stage 1 — Data ingestion**
+
+For each ticker in `tickers.csv`, OHLCV history is pulled from yfinance via `get_price_history()`. An extra 15 calendar days are added to the lookback window to ensure enough trading days. During market hours, the live price from `get_current_price()` is injected into today's close (and high if higher) so the screener reflects intraday reality.
+
+**Stage 2 — Multi-candle breakdown detection**
+
+This is the heart of `check_surge_and_loss()`. The last `breakdown_lookback_candles` candles (default 3) are scanned in reverse — most recent first — and the following four conditions must all pass on the same candle:
+
+- **C1 — Structural break:** Close < previous candle's low
+- **C2 — Meaningful drop:** The % drop below prev low ≥ `min_drop_percent` (default 0.5%). Filters out tick-below-low noise.
+- **C3 — Volume confirmation:** Breakdown candle volume ÷ 20-day average ≥ `min_breakdown_volume_ratio` (1.2×). For historical candles (offset ≥ 2), a relaxed threshold `min_historical_volume_ratio` (0.75×) is used since price not recovering is itself confirmation.
+- **C4 — EMA filter:** Breakdown close < 9-EMA. This filter only applies to offset = 1 (today's candle). Historical candles skip it.
+
+The first (most recent) candle that passes all four wins and its offset (1 = today, 2 = yesterday, etc.) is recorded.
+
+**Stage 3 — Surge continuity**
+
+Working only on candles before the breakdown candle, the code slides all valid windows of size ≥ `min_green_candles + 1`. For each window, `check_surge_continuity()` verifies the higher-low structure: red candles are allowed, but each must close at or above the previous candle's low. If any red candle breaks the prior low, the window is rejected. The best-gain window that ends within `surge_recency_days` of the breakdown is selected. If none qualifies, the ticker is rejected.
+
+**Stage 4 — Option chain + strike selection**
+
+`find_best_strike()` calls the NSE API (with TTL-based session management and random delays to avoid rate-limiting). If the nearest expiry is within 3 calendar days, the next expiry is used to avoid high-gamma risk. `nearest_round_strike_above()` finds the best CE strike anchored **above `yesterday_high`** (the resistance ceiling) — not above current price. This is intentional: the thesis says price breaking above resistance invalidates the trade, so the CE goes ITM only if the thesis fails.
+
+**Stage 5 — CE historical high check (optional)**
+
+If `ce_above_historical_high` is enabled, the NSE historical options API is queried for 30 days of CE LTP data. If today's CE LTP exceeds the 30-day high, the signal is tagged "CE at New High" (strongest signal). Otherwise it's tagged "CE Below 30d High" — included with a warning but not rejected.
+
+**Stage 6 — Signal persistence and pruning**
+
+Completed signals are merged into `signals.json`. Existing signals for the same ticker are refreshed (not duplicated). Signals older than `max_signal_age_days` are pruned automatically before saving.
+
+**Stage 7 — Proximity alerts**
+
+`check_proximity_alerts()` runs either on-demand or after every auto-scan. For each saved signal, the live price is fetched. If price is within `price_proximity_percent`% below `yesterday_high` (the resistance), a sell-zone alert fires. If price has already broken above the resistance, the thesis is invalidated and the alert is suppressed. Duplicate alerts for the same ticker within 30 minutes are deduplicated. Alerts are sent to Telegram and stored in `proximity_alerts.json`.
+
+---
+
+### All input parameters
+
+| Parameter | Default | What it controls |
+|---|---|---|
+| `lookback_days` | 30 | Trading history window for surge detection |
+| `min_gain_percent` | 20.0 | Minimum surge gain % to qualify |
+| `min_green_candles` | 3 | Min green candles inside a valid surge window |
+| `surge_recency_days` | 5 | Surge end must be within N sessions of breakdown |
+| `min_drop_percent` | 0.5 | Min % close must be below prev low (noise filter) |
+| `min_breakdown_volume_ratio` | 1.2 | Volume × avg required for today's candle |
+| `min_historical_volume_ratio` | 0.75 | Relaxed volume ratio for older candles (offset ≥ 2) |
+| `breakdown_lookback_candles` | 3 | How many recent candles to search for a breakdown |
+| `ema_period` | 9 | EMA period for trend filter |
+| `ema_filter_enabled` | True | Toggle EMA filter (today's candle only) |
+| `price_proximity_percent` | 2.0 | % below resistance that triggers sell-zone alert |
+| `ce_above_historical_high` | True | Enable 30-day CE LTP comparison |
+| `ce_history_days` | 30 | History window for CE LTP check |
+| `max_signal_age_days` | 5 | Auto-prune signals older than N days |
+| `auto_scan_enabled` | True | Enable background scheduler |
+| `auto_scan_interval_min` | 15 | Scheduler interval (min 10 minutes enforced) |
+| `market_hours_only` | True | Auto-scan only fires 9:15–15:30 IST |
+| `telegram_bot_token` | "" | Telegram bot token for alerts |
+| `telegram_chat_id` | "" | Telegram chat/group ID for alerts |
+
+---
+
+### Recommendations
+
+**Logic improvements**
+
+The `run_screen_job` has a bug in the refresh path — the list comprehension `[s if ex["Ticker"] == s["Ticker"] else ex for ex in existing]` is inverted. It should be `[s if ex["Ticker"] == s["Ticker"] else ex ...]` — but the condition selects `s` when the tickers match, which is correct — however it replaces all non-matching entries with the old record. Actually double-check this: for a ticker match it returns the new `s` and for others it returns the old `ex`. This is correct but produces a new signal `s` for every iteration where a match is found — essentially it only works correctly if there is exactly one match. If you have 200 signals and one match, 199 signals keep their correct `ex` and 1 gets replaced with `s`. This is fine but the logic is hard to read — consider `next((s if s["Ticker"] == ex["Ticker"] else ex for ex in existing), ex)` or a dict-based merge instead.
+
+**Performance**
+
+The surge window scan (`for wsize in range(window_min, n+1): for start in range(...)`) is O(n²) per ticker. For `lookback_days=30` with ~22 trading days this is fine, but as you add more tickers or increase `lookback_days`, this becomes a bottleneck. Consider caching the EMA computation outside the loop or using `numpy` stride tricks if you ever scale to 500+ tickers.
+
+**NSE session reliability**
+
+The 25-minute TTL session refresh is good, but the warm-up sequence (`nseindia.com/` → `option-chain`) is fragile because NSE occasionally changes cookie requirements. Consider adding a retry wrapper with exponential backoff for 429 responses instead of immediately returning `None, None`.
+
+**Security**
+
+`CORS allow_origins=["*"]` is wide open. Since this is your personal dashboard, you can lock it to `localhost` or your LAN IP. Also, the Telegram bot token lives in `config.json` in plaintext — consider loading it from an env variable (`os.getenv("TELEGRAM_BOT_TOKEN")`) instead.
+
+**Missing feature — invalidation cleanup**
+
+When a proximity alert fires and price subsequently breaks above resistance (thesis fails), the signal stays in `signals.json` indefinitely unless it ages out. Adding an active invalidation step during `check_proximity_alerts` — removing signals where `cur_price > resistance` — would keep the signals list clean.
+
+**`index.html` — Plotly is loaded globally**
+
+Plotly at ~3.5MB is loaded on every page load even when the chart modal hasn't been opened. Lazy-loading it on first chart open would speed up initial render meaningfully.

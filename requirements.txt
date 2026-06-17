@@ -1,0 +1,23 @@
+# ── FastAPI / Server ──────────────────────────────────
+fastapi
+uvicorn[standard]
+python-multipart
+apscheduler
+pytz
+
+# ── Data / ML ─────────────────────────────────────────
+pandas
+numpy
+scipy
+scikit-learn
+yfinance
+pandas-datareader
+
+# ── Charting (server-side data only, charts in browser)
+plotly
+
+# ── HTTP / Scraping ───────────────────────────────────
+requests
+aiohttp
+cloudscraper
+beautifulsoup4

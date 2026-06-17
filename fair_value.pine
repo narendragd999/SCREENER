@@ -1,0 +1,165 @@
+// ════════════════════════════════════════════════════════════════════════════
+// Fair Value Indicator — SMA Screener Edition  (Pine Script v6)
+// Mirrors the composite fair value from your FastAPI sma_router.py exactly:
+//   • OP model  (Operating Profit -> Price regression)  weight = R2 x 1.0
+//   • Sales model (Sales TTM -> Price regression)       weight = R2 x 0.8
+//   • TTM model  (Quarterly TTM Profit -> Price)        weight = R2 x 1.2
+//   Composite = weighted average of three fair values
+//
+// HOW IT WORKS
+// 1. On each bar Pine computes the Indian FY year (Apr 1 -> Mar 31)
+// 2. It calls your bridge endpoint:
+//      GET http://localhost:8002/api/fv/pine?ticker=RELIANCE&fy=2023
+// 3. The endpoint returns one CSV line:
+//      "2023,1842.50,0.923,1790.00,0.851,0.00,0.000,1820.00,UNDERVALUED,+12.3"
+//    Columns: FY,fair_op,r2_op,fair_s,r2_s,fair_t,r2_t,composite,bucket,misprice
+// 4. Pine draws:
+//      - A stepped line at composite FV (steps at each April 1)
+//      - Shaded +-15% band (UNDERVALUED / OVERVALUED thresholds)
+//      - A label at the start of each FY block
+//      - An info box on the last bar
+//
+// SETUP
+// 1. Add fv_router.py to your FastAPI app and restart it.
+// 2. Open TradingView -> Pine Editor -> New script -> paste this file.
+// 3. Change host input below to your server IP (or ngrok URL).
+// 4. Add to chart. TradingView will ask for permission to call the URL.
+// ════════════════════════════════════════════════════════════════════════════
+
+//@version=6
+indicator(
+    title            = "Fair Value (SMA Screener)",
+    shorttitle       = "FV",
+    overlay          = true,
+    max_labels_count = 50,
+    max_lines_count  = 50)
+
+// ── INPUTS ───────────────────────────────────────────────────────────────────
+var string host         = input.string("http://localhost:8002", "Server URL (no trailing /)")
+var bool   show_band    = input.bool(true,  "Show +-15% band")
+var bool   show_op_line = input.bool(false, "Show OP model line")
+var bool   show_s_line  = input.bool(false, "Show Sales model line")
+var bool   show_t_line  = input.bool(false, "Show TTM model line")
+var bool   show_labels  = input.bool(true,  "Show FY labels")
+var color  col_under    = input.color(color.new(color.green,  80), "Undervalued fill")
+var color  col_fair     = input.color(color.new(color.yellow, 80), "Fair fill")
+var color  col_over     = input.color(color.new(color.red,    80), "Overvalued fill")
+
+// ── INDIAN FY YEAR ────────────────────────────────────────────────────────────
+// April 1 of year Y -> March 31 of year Y+1 -> FY label = Y
+// e.g. Jan 2024: month=1 < 4 -> fy_year = 2024 - 1 = 2023
+int fy_year = month >= 4 ? year : year - 1
+
+// ── BUILD REQUEST URL ─────────────────────────────────────────────────────────
+string ticker_nse = syminfo.ticker
+string req_url    = host + "/api/fv/pine?ticker=" + ticker_nse + "&fy=" + str.tostring(fy_year)
+
+// ── FETCH CSV FROM BRIDGE ─────────────────────────────────────────────────────
+// request.security() accepts a URL string. Returns raw text fetched at Daily
+// resolution so the endpoint is only called when FY changes (once per year).
+// Format returned: "FY,fair_op,r2_op,fair_s,r2_s,fair_t,r2_t,composite,bucket,misprice"
+// Index:             0    1      2     3     4     5     6      7          8       9
+string raw = request.security(req_url, "D", str.tostring(close))
+
+string[] cols = str.split(raw, ",")
+
+float  fv_op   = array.size(cols) > 1 ? str.tonumber(array.get(cols, 1)) : na
+float  fv_s    = array.size(cols) > 3 ? str.tonumber(array.get(cols, 3)) : na
+float  fv_t    = array.size(cols) > 5 ? str.tonumber(array.get(cols, 5)) : na
+float  fv_comp = array.size(cols) > 7 ? str.tonumber(array.get(cols, 7)) : na
+string bucket  = array.size(cols) > 8 ? array.get(cols, 8) : "NODATA"
+string gap_s   = array.size(cols) > 9 ? array.get(cols, 9) : "0"
+
+// ── COLOUR PER BUCKET ────────────────────────────────────────────────────────
+color line_col = switch bucket
+    "UNDERVALUED" => color.new(color.green,  0)
+    "OVERVALUED"  => color.new(color.red,    0)
+    =>               color.new(color.yellow, 0)
+
+color fill_col = switch bucket
+    "UNDERVALUED" => col_under
+    "OVERVALUED"  => col_over
+    =>               col_fair
+
+// ── PLOT COMPOSITE FV ────────────────────────────────────────────────────────
+plot(fv_comp,
+     title     = "Fair Value (Composite)",
+     color     = line_col,
+     linewidth = 2,
+     style     = plot.style_stepline)
+
+// ── PLOT SECONDARY MODEL LINES (optional) ────────────────────────────────────
+plot(show_op_line ? fv_op : na,
+     title     = "FV - OP model",
+     color     = color.new(color.blue,   50),
+     linewidth = 1,
+     style     = plot.style_stepline)
+
+plot(show_s_line ? fv_s : na,
+     title     = "FV - Sales model",
+     color     = color.new(color.purple, 50),
+     linewidth = 1,
+     style     = plot.style_stepline)
+
+plot(show_t_line ? fv_t : na,
+     title     = "FV - TTM model",
+     color     = color.new(color.orange, 50),
+     linewidth = 1,
+     style     = plot.style_stepline)
+
+// ── +-15% BAND ────────────────────────────────────────────────────────────────
+float fv_upper = not na(fv_comp) ? fv_comp * 1.15 : na
+float fv_lower = not na(fv_comp) ? fv_comp * 0.85 : na
+
+p_upper = plot(show_band ? fv_upper : na,
+     title     = "FV +15%",
+     color     = color.new(line_col, 70),
+     linewidth = 1,
+     style     = plot.style_stepline)
+
+p_lower = plot(show_band ? fv_lower : na,
+     title     = "FV -15%",
+     color     = color.new(line_col, 70),
+     linewidth = 1,
+     style     = plot.style_stepline)
+
+fill(p_upper, p_lower, color = fill_col)
+
+// ── FY BOUNDARY LABEL ─────────────────────────────────────────────────────────
+// Draw label on the first bar of each new Indian FY (April crossover)
+bool is_fy_first_bar = (month == 4) and (month[1] != 4)
+
+if show_labels and is_fy_first_bar and not na(fv_comp)
+    string lbl_text = str.tostring(fy_year) + " FY\nFV: " + str.tostring(fv_comp, "#.##") + "\n" + bucket + "  " + gap_s + "%"
+    color  lbl_col  = switch bucket
+        "UNDERVALUED" => color.new(color.green,  20)
+        "OVERVALUED"  => color.new(color.red,    20)
+        =>               color.new(color.yellow, 20)
+    label.new(
+         x         = bar_index,
+         y         = fv_comp,
+         text      = lbl_text,
+         style     = label.style_label_right,
+         color     = lbl_col,
+         textcolor = color.white,
+         size      = size.small)
+
+// ── CURRENT PRICE vs FV INFO BOX (last bar only) ──────────────────────────────
+if barstate.islast and not na(fv_comp)
+    float  cur      = close
+    float  diff_pct = (cur - fv_comp) / fv_comp * 100
+    string sign     = diff_pct >= 0 ? "+" : ""
+    string diff_s   = sign + str.tostring(diff_pct, "#.#") + "%"
+    string info_text = ticker_nse + "  FY" + str.tostring(fy_year) + "\nCMP  " + str.tostring(cur, "#.##") + "\nFV   " + str.tostring(fv_comp, "#.##") + "\nGap  " + diff_s + "\n" + bucket
+    color  info_bg  = switch bucket
+        "UNDERVALUED" => color.new(color.green,  15)
+        "OVERVALUED"  => color.new(color.red,    15)
+        =>               color.new(color.yellow, 15)
+    label.new(
+         x         = bar_index + 2,
+         y         = cur,
+         text      = info_text,
+         style     = label.style_label_left,
+         color     = info_bg,
+         textcolor = color.white,
+         size      = size.normal)

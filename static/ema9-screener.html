@@ -1,0 +1,2753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>9 EMA Momentum Screener</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/tailwindcss-cdn@3.4.16/tailwindcss.min.js" onerror="void(0)"></script>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        ui:   ['"Exo 2"', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+      },
+      colors: {
+        base:   '#030912',
+        card:   '#0a1628',
+        card2:  '#0f1d32',
+        border: '#1a2d4a',
+        accent: '#00e5a0',
+        accent2:'#00b8d4',
+        warn:   '#f59e0b',
+        danger: '#ef4444',
+      }
+    }
+  }
+}
+</script>
+
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Exo 2', sans-serif;
+    background: #030912;
+    color: #e2e8f0;
+    min-height: 100vh;
+  }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+  .upload-zone {
+    border: 2px dashed #1a2d4a;
+    background: linear-gradient(135deg, rgba(0,229,160,0.03), rgba(0,184,212,0.03));
+    transition: all 0.3s ease;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: #00e5a0;
+    background: linear-gradient(135deg, rgba(0,229,160,0.08), rgba(0,184,212,0.08));
+    box-shadow: 0 0 30px rgba(0,229,160,0.1);
+  }
+
+  .glow-target {
+    color: #00e5a0;
+    text-shadow: 0 0 8px rgba(0,229,160,0.5), 0 0 20px rgba(0,229,160,0.2);
+  }
+
+  @keyframes pulse-warn {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+  }
+  .pulse-warn { animation: pulse-warn 1.5s ease-in-out infinite; }
+
+  .signal-row {
+    transition: background 0.15s ease;
+    cursor: pointer;
+  }
+  .signal-row:hover {
+    background: rgba(0,229,160,0.06) !important;
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #0a1628; }
+  ::-webkit-scrollbar-thumb { background: #1a2d4a; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #2a4d6a; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid rgba(0,229,160,0.2);
+    border-top-color: #00e5a0;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: inline-block;
+  }
+  .spinner-sm {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(0,229,160,0.2);
+    border-top-color: #00e5a0;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  .modal-backdrop {
+    background: rgba(3,9,18,0.85);
+    backdrop-filter: blur(8px);
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(26,45,74,0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(26,45,74,0.12) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .badge-fresh {
+    background: rgba(0,229,160,0.15);
+    color: #00e5a0;
+    border: 1px solid rgba(0,229,160,0.3);
+  }
+  .badge-nearing {
+    background: rgba(245,158,11,0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245,158,11,0.3);
+  }
+  .badge-nodata {
+    background: rgba(100,116,139,0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(100,116,139,0.3);
+  }
+  .badge-nosignal {
+    background: rgba(100,116,139,0.15);
+    color: #64748b;
+    border: 1px solid rgba(100,116,139,0.3);
+  }
+  .badge-uptrend {
+    background: rgba(0,229,160,0.1);
+    color: #00e5a0;
+  }
+  .badge-sideways {
+    background: rgba(245,158,11,0.1);
+    color: #f59e0b;
+  }
+  .badge-downtrend {
+    background: rgba(239,68,68,0.1);
+    color: #ef4444;
+  }
+  .badge-prime {
+    background: rgba(0,229,160,0.2);
+    color: #00e5a0;
+    border: 1px solid rgba(0,229,160,0.4);
+  }
+  .badge-technical {
+    background: rgba(245,158,11,0.2);
+    color: #f59e0b;
+    border: 1px solid rgba(245,158,11,0.4);
+  }
+  .badge-fv-missing {
+    background: rgba(100,116,139,0.1);
+    color: #64748b;
+    border: 1px solid rgba(100,116,139,0.2);
+  }
+
+  .glass-card {
+    background: linear-gradient(135deg, rgba(10,22,40,0.9), rgba(15,29,50,0.8));
+    border: 1px solid rgba(26,45,74,0.6);
+    backdrop-filter: blur(10px);
+  }
+
+  .autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    max-height: 200px;
+    overflow-y: auto;
+    background: #0f1d32;
+    border: 1px solid #1a2d4a;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .autocomplete-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.1s;
+  }
+  .autocomplete-item:hover, .autocomplete-item.active {
+    background: rgba(0,229,160,0.1);
+  }
+  .autocomplete-item .sym { color: #e2e8f0; font-family: 'JetBrains Mono', monospace; }
+  .autocomplete-item .nam { color: #64748b; font-size: 11px; margin-left: 8px; }
+
+  .scan-card {
+    border-left: 3px solid;
+    transition: all 0.3s ease;
+  }
+  .scan-card.prime  { border-left-color: #00e5a0; }
+  .scan-card.tech   { border-left-color: #f59e0b; }
+  .scan-card.nodata { border-left-color: #64748b; }
+
+  /* FV fetch button in table */
+  .fv-fetch-btn {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(0,184,212,0.1);
+    color: #00b8d4;
+    border: 1px solid rgba(0,184,212,0.3);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .fv-fetch-btn:hover {
+    background: rgba(0,184,212,0.2);
+    border-color: rgba(0,184,212,0.5);
+  }
+  .fv-fetch-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .tab-btn {
+    color: #64748b;
+  }
+  .tab-btn.active {
+    background: rgba(0,229,160,0.12);
+    color: #00e5a0;
+    border: 1px solid rgba(0,229,160,0.25);
+  }
+  .tab-btn:hover:not(.active) {
+    color: #94a3b8;
+    background: rgba(255,255,255,0.04);
+  }
+
+  /* Backtest specific */
+  .bt-win    { color: #00e5a0; }
+  .bt-loss   { color: #ef4444; }
+  .bt-timeout { color: #f59e0b; }
+  .trade-win     { border-left: 3px solid #00e5a0; }
+  .trade-loss    { border-left: 3px solid #ef4444; }
+  .trade-timeout { border-left: 3px solid #f59e0b; }
+  .trade-skipped { border-left: 3px solid #6366f1; opacity: 0.72; }
+  .trade-skipped td { background: rgba(99,102,241,0.03); }
+  .skipped-row { display: none !important; }
+  .skipped-row.show { display: table-row !important; }
+
+  .bt-stat-card {
+    background: linear-gradient(135deg, rgba(10,22,40,0.9), rgba(15,29,50,0.8));
+    border: 1px solid rgba(26,45,74,0.6);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .progress-bar-wrap { height: 6px; background: #0f1d32; border-radius: 3px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #00e5a0, #00b8d4); transition: width 0.4s ease; }
+
+  .sortable-th { cursor: pointer; user-select: none; white-space: nowrap; }
+  .sortable-th:hover { color: #00e5a0; }
+  .sort-icon { display: inline-block; margin-left: 3px; opacity: 0.35; font-size: 9px; }
+  .sort-icon.active { opacity: 1; color: #00e5a0; }
+
+  .ticker-chip { display: inline-flex; align-items: center; gap: 4px; background: rgba(26,45,74,0.6); border: 1px solid #1a2d4a; border-radius: 6px; padding: 2px 8px; font-family: "JetBrains Mono", monospace; font-size: 11px; color: #94a3b8; cursor: pointer; transition: all 0.15s; }
+  .ticker-chip:hover { border-color: #ef4444; color: #ef4444; }
+
+  @keyframes fadeSlide { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-slide { animation: fadeSlide 0.25s ease; }
+
+  /* ── Critical layout fallbacks (survive Tailwind CDN failure) ── */
+  header { padding: 1rem 1.5rem; border-bottom: 1px solid rgba(26,45,74,0.5); }
+  header > div { max-width: 80rem; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+  header .logo-wrap { display: flex; align-items: center; gap: 0.75rem; }
+  header .logo-icon { width: 40px; height: 40px; min-width: 40px; border-radius: 8px; background: linear-gradient(135deg, #00e5a0, #00b8d4); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  header .logo-icon svg { display: block; }
+  header h1 { font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0; white-space: nowrap; }
+  header p  { font-size: 0.7rem; color: #64748b; margin: 0; }
+  main { max-width: 80rem; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* Tooltip */
+  .fv-error-tip {
+    position: relative;
+    cursor: help;
+    border-bottom: 1px dotted #64748b;
+  }
+  .fv-error-tip:hover::after {
+    content: attr(data-error);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1a2d4a;
+    color: #94a3b8;
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    z-index: 50;
+    pointer-events: none;
+  }
+</style>
+</head>
+
+<body class="grid-bg">
+
+<header class="border-b border-border/50 py-4 px-6">
+  <div class="max-w-7xl mx-auto flex items-center justify-between">
+    <div class="logo-wrap flex items-center gap-3">
+      <div class="logo-icon w-10 h-10 rounded-lg bg-gradient-to-br from-accent to-accent2 flex items-center justify-center">
+        <svg class="w-5 h-5" width="20" height="20" fill="none" stroke="#030912" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 7h4l3 9 4-12 3 9h4"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="font-ui text-xl font-800 tracking-tight text-white">9 EMA Momentum Screener</h1>
+        <p class="font-ui text-xs text-slate-500 tracking-wide">Breakout + Confirmation + 3% Target</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-4 text-xs font-mono text-slate-500">
+      <div class="flex items-center gap-1 bg-card2 rounded-lg p-1 border border-border/40">
+        <button id="tabScreener" onclick="switchTab('screener')"
+          class="tab-btn active px-4 py-1.5 rounded-md font-ui text-xs font-600 transition-all duration-200">
+          📊 Screener
+        </button>
+        <button id="tabBacktest" onclick="switchTab('backtest')"
+          class="tab-btn px-4 py-1.5 rounded-md font-ui text-xs font-600 transition-all duration-200">
+          🔬 Backtest
+        </button>
+        <button id="tabChartink" onclick="switchTab('chartink')"
+          class="tab-btn px-4 py-1.5 rounded-md font-ui text-xs font-600 transition-all duration-200">
+          📡 Chartink
+        </button>
+      </div>
+      <span id="clock"></span>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-8">
+
+<!-- ═══════════════ SCREENER PANEL ═══════════════ -->
+<div id="screenerPanel" class="space-y-8">
+
+  <!-- ═══════════════ QUICK SCAN ═══════════════ -->
+  <section class="glass-card rounded-2xl p-6">
+    <div class="flex items-center gap-2 mb-4">
+      <svg class="w-5 h-5 text-accent2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+      </svg>
+      <h2 class="font-ui text-lg font-700 text-white">Quick Scan</h2>
+      <span class="text-xs font-mono text-slate-500 ml-2">Single ticker analysis</span>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <div class="relative flex-1 max-w-md">
+        <input type="text" id="tickerInput"
+          placeholder="Enter ticker (e.g. RELIANCE, TCS, INFY)"
+          autocomplete="off"
+          class="w-full px-4 py-2.5 rounded-lg bg-card2 border border-border/50
+                 font-mono text-sm text-white placeholder-slate-600
+                 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20
+                 transition-all duration-200">
+        <div id="autocompleteDropdown" class="autocomplete-list hidden"></div>
+      </div>
+      <button id="quickScanBtn"
+        class="px-5 py-2.5 rounded-lg font-ui font-600 text-sm
+               bg-gradient-to-r from-accent2 to-accent text-base
+               hover:shadow-lg hover:shadow-accent2/20 transition-all duration-200
+               flex items-center gap-2 whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+        </svg>
+        <span id="quickScanText">Scan</span>
+        <span id="quickScanSpinner" class="spinner-sm hidden"></span>
+      </button>
+    </div>
+
+    <div id="quickScanResult" class="hidden mt-5"></div>
+  </section>
+
+  <!-- ═══════════════ CSV UPLOAD ═══════════════ -->
+  <section class="glass-card rounded-2xl p-6">
+    <div class="flex items-center gap-2 mb-4">
+      <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+      </svg>
+      <h2 class="font-ui text-lg font-700 text-white">Upload CSV</h2>
+      <span class="text-xs font-mono text-slate-500 ml-2">Third-party screener exports supported</span>
+    </div>
+
+    <div id="dropZone" class="upload-zone rounded-xl p-8 text-center">
+      <input type="file" id="fileInput" accept=".csv" class="hidden">
+      <div class="space-y-3">
+        <div class="mx-auto w-16 h-16 rounded-full bg-card2 flex items-center justify-center">
+          <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+          </svg>
+        </div>
+        <p class="font-ui text-sm text-slate-400">
+          Drag & drop your CSV here, or <button onclick="document.getElementById('fileInput').click()" class="text-accent hover:underline">browse files</button>
+        </p>
+        <p class="font-mono text-xs text-slate-600">Auto-detects Symbol / Ticker / Stock column &bull; BOM-safe parsing</p>
+      </div>
+    </div>
+
+    <div id="fileInfo" class="hidden mt-4 flex items-center justify-between bg-card2 rounded-lg px-4 py-3">
+      <div class="flex items-center gap-3">
+        <svg class="w-4 h-4 text-accent" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+        </svg>
+        <span id="fileName" class="font-mono text-sm text-slate-300"></span>
+        <span id="fileTickerCount" class="font-mono text-xs text-slate-500"></span>
+      </div>
+      <button id="clearFile" class="text-xs text-slate-500 hover:text-danger transition-colors">Clear</button>
+    </div>
+
+    <div class="mt-4 flex items-center gap-4">
+      <button id="screenBtn" disabled
+        class="px-6 py-2.5 rounded-lg font-ui font-600 text-sm
+               bg-gradient-to-r from-accent to-accent2 text-base
+               disabled:opacity-30 disabled:cursor-not-allowed
+               hover:shadow-lg hover:shadow-accent/20 transition-all duration-200
+               flex items-center gap-2">
+        <span id="screenBtnText">Process & Screen</span>
+        <span id="screenBtnSpinner" class="spinner hidden"></span>
+      </button>
+      <span id="csvStatusText" class="font-mono text-xs text-slate-500"></span>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SUMMARY STATS ═══════════════ -->
+  <section id="summarySection" class="hidden">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <div class="glass-card rounded-xl p-4 text-center">
+        <p class="font-mono text-2xl font-700 text-white" id="statTotal">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Total Signals</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center border-accent/20">
+        <p class="font-mono text-2xl font-700 text-accent" id="statPrime">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Prime Targets</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center border-warn/20">
+        <p class="font-mono text-2xl font-700 text-warn" id="statOther">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Technical Only</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center">
+        <p class="font-mono text-2xl font-700 text-slate-400" id="statFiltered">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Trend Filtered</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center">
+        <p class="font-mono text-2xl font-700 text-danger" id="statFailed">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Failed</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center">
+        <p class="font-mono text-2xl font-700 text-slate-500" id="statFvMissing">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">FV Missing</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ TABLE A: PRIME TARGETS ═══════════════ -->
+  <section id="primeSection" class="hidden">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3 flex-wrap">
+        <span class="text-lg">🎯</span>
+        <h2 class="font-ui text-lg font-700 text-accent">PRIME TARGETS: UNDERVALUED + UPTREND</h2>
+        <span id="primeCount" class="font-mono text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full">0</span>
+        <div class="ml-auto flex items-center gap-2">
+          <span class="font-mono text-xs text-slate-500">Sort:</span>
+          <select id="primeSortSelect" onchange="sortScreenerTable('prime')"
+            class="bg-card2 border border-border/50 rounded-lg px-3 py-1 font-mono text-xs text-slate-300
+                   focus:outline-none focus:border-accent/50">
+            <option value="gap_desc">Gap to FV ↓ (Most Undervalued)</option>
+            <option value="gap_asc">Gap to FV ↑ (Least Undervalued)</option>
+            <option value="candles_asc">Freshness ↑ (Newest Signal)</option>
+            <option value="candles_desc">Freshness ↓ (Oldest Signal)</option>
+            <option value="price_desc">Price ↓</option>
+            <option value="price_asc">Price ↑</option>
+          </select>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs font-ui font-600 text-slate-500 uppercase tracking-wider border-b border-border/30">
+              <th class="px-4 py-3">Ticker</th>
+              <th class="px-4 py-3">Price</th>
+              <th class="px-4 py-3">3% Target</th>
+              <th class="px-4 py-3">EMA 9</th>
+              <th class="px-4 py-3">SMA 50</th>
+              <th class="px-4 py-3">Fair Value</th>
+              <th class="px-4 py-3">Gap to FV</th>
+              <th class="px-4 py-3">BO Date</th>
+              <th class="px-4 py-3">CF Date</th>
+              <th class="px-4 py-3">Ago</th>
+              <th class="px-4 py-3">Trend</th>
+              <th class="px-4 py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody id="primeTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ TABLE B: OTHER SIGNALS ═══════════════ -->
+  <section id="otherSection" class="hidden">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3 flex-wrap">
+        <span class="text-lg">⚖️</span>
+        <h2 class="font-ui text-lg font-700 text-warn">TECHNICAL BREAKOUTS (OVERVALUED)</h2>
+        <span id="otherCount" class="font-mono text-xs bg-warn/10 text-warn px-2 py-0.5 rounded-full">0</span>
+        <div class="ml-auto flex items-center gap-2">
+          <span class="font-mono text-xs text-slate-500">Sort:</span>
+          <select id="otherSortSelect" onchange="sortScreenerTable('other')"
+            class="bg-card2 border border-border/50 rounded-lg px-3 py-1 font-mono text-xs text-slate-300
+                   focus:outline-none focus:border-warn/50">
+            <option value="candles_asc">Freshness ↑ (Newest Signal)</option>
+            <option value="candles_desc">Freshness ↓ (Oldest Signal)</option>
+            <option value="gap_asc">Gap to FV ↑ (Closest to FV)</option>
+            <option value="gap_desc">Gap to FV ↓</option>
+            <option value="price_desc">Price ↓</option>
+            <option value="price_asc">Price ↑</option>
+          </select>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs font-ui font-600 text-slate-500 uppercase tracking-wider border-b border-border/30">
+              <th class="px-4 py-3">Ticker</th>
+              <th class="px-4 py-3">Price</th>
+              <th class="px-4 py-3">3% Target</th>
+              <th class="px-4 py-3">EMA 9</th>
+              <th class="px-4 py-3">SMA 50</th>
+              <th class="px-4 py-3">Fair Value</th>
+              <th class="px-4 py-3">Gap to FV</th>
+              <th class="px-4 py-3">BO Date</th>
+              <th class="px-4 py-3">CF Date</th>
+              <th class="px-4 py-3">Ago</th>
+              <th class="px-4 py-3">Trend</th>
+              <th class="px-4 py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody id="otherTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ FAILED / FILTERED ═══════════════ -->
+  <section id="failedSection" class="hidden">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3 cursor-pointer" onclick="toggleFailed()">
+        <span class="text-lg">⚠️</span>
+        <h2 class="font-ui text-lg font-700 text-slate-400">Filtered & Failed Tickers</h2>
+        <span id="failedCount" class="font-mono text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">0</span>
+        <svg id="failedChevron" class="w-4 h-4 text-slate-500 ml-auto transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </div>
+      <div id="failedContent" class="hidden px-6 py-4">
+        <div id="filteredByTrend" class="mb-4 hidden">
+          <h3 class="font-ui text-xs font-600 text-slate-500 uppercase mb-2">Trend Filtered (Close &le; 50 SMA)</h3>
+          <div id="filteredTags" class="flex flex-wrap gap-2"></div>
+        </div>
+        <div id="failedList" class="hidden">
+          <h3 class="font-ui text-xs font-600 text-slate-500 uppercase mb-2">Failed / No Data</h3>
+          <div id="failedTags" class="flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div><!-- /screenerPanel -->
+
+<!-- ═══════════════ CHARTINK LIVE PANEL ═══════════════ -->
+<div id="chartinkPanel" class="hidden space-y-8">
+
+  <!-- ═══════════════ CONTROL BAR ═══════════════ -->
+  <section class="glass-card rounded-2xl p-6">
+    <div class="flex items-center justify-between flex-wrap gap-4">
+      <div class="flex items-center gap-2">
+        <svg class="w-5 h-5 text-accent2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 111.06 0z"/>
+        </svg>
+        <h2 class="font-ui text-lg font-700 text-white">Chartink Live Feed</h2>
+        <span id="chartinkStoredCount" class="font-mono text-xs bg-accent2/10 text-accent2 px-2 py-0.5 rounded-full ml-1">0 stored</span>
+        <span class="text-xs font-mono text-slate-500 ml-2">Signals accumulate across scans &bull; EMA9 + Trend + Fair Value applied &bull; clear to reset</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="chartinkStatusText" class="font-mono text-xs text-slate-500"></span>
+        <button id="chartinkScanNowBtn" onclick="runChartinkScanNow()"
+          class="px-4 py-2 rounded-lg font-ui font-600 text-xs
+                 bg-gradient-to-r from-accent2 to-accent text-base
+                 hover:shadow-lg hover:shadow-accent2/20 transition-all duration-200
+                 flex items-center gap-2 whitespace-nowrap">
+          <span id="chartinkScanNowText">Scan Now</span>
+          <span id="chartinkScanNowSpinner" class="spinner-sm hidden"></span>
+        </button>
+        <button id="chartinkClearBtn" onclick="clearChartinkResults()"
+          class="px-4 py-2 rounded-lg font-ui font-600 text-xs
+                 bg-card2 border border-border/50 text-slate-400
+                 hover:text-danger hover:border-danger/40 transition-all duration-200"
+          title="Clear all stored signals from memory">
+          Clear All
+        </button>
+      </div>
+    </div>
+    <div class="mt-3 flex items-center gap-2 text-xs font-mono text-slate-600">
+      <span>Last scan:</span>
+      <span id="chartinkLastRun">never</span>
+      <span class="mx-1">&bull;</span>
+      <span>Next auto-scan:</span>
+      <span id="chartinkNextScan" class="text-accent2">5:00</span>
+      <span class="mx-1">&bull;</span>
+      <span>Last pull:</span>
+      <span id="chartinkSymbolCount">0</span>
+      <span class="text-slate-700">tickers</span>
+      <span id="chartinkSymbolList" class="text-slate-500 truncate"></span>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SUMMARY STATS ═══════════════ -->
+  <section id="chartinkSummarySection" class="hidden">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div class="glass-card rounded-xl p-4 text-center">
+        <p class="font-mono text-2xl font-700 text-white" id="chartinkStatTotal">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Stored Signals</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center border-accent/20">
+        <p class="font-mono text-2xl font-700 text-accent" id="chartinkStatPrime">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Prime Targets</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center border-warn/20">
+        <p class="font-mono text-2xl font-700 text-warn" id="chartinkStatOther">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Technical Only</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center">
+        <p class="font-mono text-2xl font-700 text-slate-400" id="chartinkStatFiltered">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Last Scan Filtered</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center">
+        <p class="font-mono text-2xl font-700 text-danger" id="chartinkStatFailed">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Last Scan Failed</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ TABLE A: PRIME TARGETS (Chartink) ═══════════════ -->
+  <section id="chartinkPrimeSection" class="hidden">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3 flex-wrap">
+        <span class="text-lg">🎯</span>
+        <h2 class="font-ui text-lg font-700 text-accent">PRIME TARGETS: UNDERVALUED + UPTREND</h2>
+        <span id="chartinkPrimeCount" class="font-mono text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full">0</span>
+        <div class="ml-auto flex items-center gap-2">
+          <span class="font-mono text-xs text-slate-500">Sort:</span>
+          <select id="chartinkPrimeSortSelect" onchange="sortChartinkTable('prime')"
+            class="bg-card2 border border-border/50 rounded-lg px-3 py-1 font-mono text-xs text-slate-300
+                   focus:outline-none focus:border-accent/50">
+            <option value="gap_desc">Gap to FV ↓ (Most Undervalued)</option>
+            <option value="gap_asc">Gap to FV ↑ (Least Undervalued)</option>
+            <option value="candles_asc">Freshness ↑ (Newest Signal)</option>
+            <option value="candles_desc">Freshness ↓ (Oldest Signal)</option>
+            <option value="price_desc">Price ↓</option>
+            <option value="price_asc">Price ↑</option>
+          </select>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs font-ui font-600 text-slate-500 uppercase tracking-wider border-b border-border/30">
+              <th class="px-4 py-3">Ticker</th>
+              <th class="px-4 py-3">Price</th>
+              <th class="px-4 py-3">3% Target</th>
+              <th class="px-4 py-3">EMA 9</th>
+              <th class="px-4 py-3">SMA 50</th>
+              <th class="px-4 py-3">Fair Value</th>
+              <th class="px-4 py-3">Gap to FV</th>
+              <th class="px-4 py-3">BO Date</th>
+              <th class="px-4 py-3">CF Date</th>
+              <th class="px-4 py-3">Ago</th>
+              <th class="px-4 py-3">Trend</th>
+              <th class="px-4 py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody id="chartinkPrimeTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ TABLE B: OTHER SIGNALS (Chartink) ═══════════════ -->
+  <section id="chartinkOtherSection" class="hidden">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3 flex-wrap">
+        <span class="text-lg">⚖️</span>
+        <h2 class="font-ui text-lg font-700 text-warn">TECHNICAL BREAKOUTS (OVERVALUED)</h2>
+        <span id="chartinkOtherCount" class="font-mono text-xs bg-warn/10 text-warn px-2 py-0.5 rounded-full">0</span>
+        <div class="ml-auto flex items-center gap-2">
+          <span class="font-mono text-xs text-slate-500">Sort:</span>
+          <select id="chartinkOtherSortSelect" onchange="sortChartinkTable('other')"
+            class="bg-card2 border border-border/50 rounded-lg px-3 py-1 font-mono text-xs text-slate-300
+                   focus:outline-none focus:border-warn/50">
+            <option value="candles_asc">Freshness ↑ (Newest Signal)</option>
+            <option value="candles_desc">Freshness ↓ (Oldest Signal)</option>
+            <option value="gap_asc">Gap to FV ↑ (Closest to FV)</option>
+            <option value="gap_desc">Gap to FV ↓</option>
+            <option value="price_desc">Price ↓</option>
+            <option value="price_asc">Price ↑</option>
+          </select>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs font-ui font-600 text-slate-500 uppercase tracking-wider border-b border-border/30">
+              <th class="px-4 py-3">Ticker</th>
+              <th class="px-4 py-3">Price</th>
+              <th class="px-4 py-3">3% Target</th>
+              <th class="px-4 py-3">EMA 9</th>
+              <th class="px-4 py-3">SMA 50</th>
+              <th class="px-4 py-3">Fair Value</th>
+              <th class="px-4 py-3">Gap to FV</th>
+              <th class="px-4 py-3">BO Date</th>
+              <th class="px-4 py-3">CF Date</th>
+              <th class="px-4 py-3">Ago</th>
+              <th class="px-4 py-3">Trend</th>
+              <th class="px-4 py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody id="chartinkOtherTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ FAILED / FILTERED (Chartink) ═══════════════ -->
+  <section id="chartinkFailedSection" class="hidden">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3 cursor-pointer" onclick="toggleChartinkFailed()">
+        <span class="text-lg">⚠️</span>
+        <h2 class="font-ui text-lg font-700 text-slate-400">Filtered & Failed Tickers</h2>
+        <span id="chartinkFailedCount" class="font-mono text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">0</span>
+        <svg id="chartinkFailedChevron" class="w-4 h-4 text-slate-500 ml-auto transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </div>
+      <div id="chartinkFailedContent" class="hidden px-6 py-4">
+        <div id="chartinkFilteredByTrend" class="mb-4 hidden">
+          <h3 class="font-ui text-xs font-600 text-slate-500 uppercase mb-2">Trend Filtered (Close &le; 50 SMA)</h3>
+          <div id="chartinkFilteredTags" class="flex flex-wrap gap-2"></div>
+        </div>
+        <div id="chartinkFailedList" class="hidden">
+          <h3 class="font-ui text-xs font-600 text-slate-500 uppercase mb-2">Failed (Data/Network Errors)</h3>
+          <div id="chartinkFailedTags" class="flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ EMPTY STATE ═══════════════ -->
+  <section id="chartinkEmptySection" class="glass-card rounded-2xl p-10 text-center">
+    <p class="font-ui text-slate-500 text-sm">No signals stored yet. The feed auto-scans every 5 minutes, or click <span class="text-accent">Scan Now</span>.<br><span class="text-slate-600 text-xs mt-1 block">All found signals accumulate here across scans and page reloads until you click <span class="text-slate-400">Clear All</span>.</span></p>
+  </section>
+
+</div><!-- /chartinkPanel -->
+
+<!-- ═══════════════ BACKTEST PANEL ═══════════════ -->
+<div id="backtestPanel" class="hidden space-y-8">
+
+  <!-- Config Card -->
+  <section class="glass-card rounded-2xl p-6">
+    <div class="flex items-center gap-2 mb-5">
+      <svg class="w-5 h-5 text-accent2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+      </svg>
+      <h2 class="font-ui text-lg font-700 text-white">Backtest Configuration</h2>
+      <span class="text-xs font-mono text-slate-500 ml-2">Walk-forward 9 EMA Breakout Simulation</span>
+    </div>
+
+    <!-- Ticker input area -->
+    <div class="mb-5">
+      <label class="block font-ui text-xs font-600 text-slate-400 uppercase tracking-wider mb-2">Tickers to Backtest</label>
+      <div class="flex gap-3">
+        <div class="relative flex-1 max-w-sm">
+          <input type="text" id="btTickerInput"
+            placeholder="Add ticker (e.g. RELIANCE)"
+            autocomplete="off"
+            class="w-full px-4 py-2.5 rounded-lg bg-card2 border border-border/50
+                   font-mono text-sm text-white placeholder-slate-600
+                   focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20
+                   transition-all duration-200">
+        </div>
+        <button onclick="btAddTicker()"
+          class="px-4 py-2.5 rounded-lg font-ui font-600 text-sm bg-card2 border border-border/50
+                 text-slate-300 hover:border-accent/40 hover:text-accent transition-all">
+          + Add
+        </button>
+        <label class="px-4 py-2.5 rounded-lg font-ui font-600 text-sm bg-card2 border border-border/50
+                      text-slate-300 hover:border-accent/40 hover:text-accent transition-all cursor-pointer">
+          📄 CSV
+          <input type="file" id="btCsvInput" accept=".csv" class="hidden" onchange="btLoadCsv(this)">
+        </label>
+        <button onclick="btLoadFno()"
+          class="px-4 py-2.5 rounded-lg font-ui font-600 text-sm bg-card2 border border-border/50
+                 text-slate-300 hover:border-accent/40 hover:text-accent transition-all whitespace-nowrap">
+          Load F&amp;O List
+        </button>
+      </div>
+      <!-- Ticker chips -->
+      <div id="btTickerChips" class="flex flex-wrap gap-2 mt-3 min-h-[28px]"></div>
+      <p id="btTickerCount" class="font-mono text-xs text-slate-500 mt-1"></p>
+    </div>
+
+    <!-- Parameters -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+      <div>
+        <label class="block font-ui text-xs font-600 text-slate-400 uppercase tracking-wider mb-1.5">Target %</label>
+        <input type="number" id="btTargetPct" value="3" min="1" max="20" step="0.5"
+          class="w-full px-3 py-2 rounded-lg bg-card2 border border-border/50 font-mono text-sm text-white
+                 focus:outline-none focus:border-accent/50 transition-all">
+      </div>
+      <div>
+        <label class="block font-ui text-xs font-600 text-slate-400 uppercase tracking-wider mb-1.5">Max Hold Days</label>
+        <input type="number" id="btMaxHold" value="15" min="3" max="60"
+          class="w-full px-3 py-2 rounded-lg bg-card2 border border-border/50 font-mono text-sm text-white
+                 focus:outline-none focus:border-accent/50 transition-all">
+      </div>
+      <div class="flex flex-col gap-2 justify-end pb-1">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <div class="relative">
+            <input type="checkbox" id="btRequireUptrend" checked class="sr-only peer">
+            <div class="w-10 h-5 bg-card2 border border-border/50 rounded-full peer
+                        peer-checked:bg-accent/20 peer-checked:border-accent/40 transition-all"></div>
+            <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-slate-500 rounded-full transition-all
+                        peer-checked:translate-x-5 peer-checked:bg-accent"></div>
+          </div>
+          <span class="font-ui text-sm text-slate-300">Require Uptrend (SMA50)</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer" title="Fetch Fair Value per ticker (slower — uses Screener.in + yfinance)">
+          <div class="relative">
+            <input type="checkbox" id="btFetchFV" class="sr-only peer">
+            <div class="w-10 h-5 bg-card2 border border-border/50 rounded-full peer
+                        peer-checked:bg-accent2/20 peer-checked:border-accent2/40 transition-all"></div>
+            <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-slate-500 rounded-full transition-all
+                        peer-checked:translate-x-5 peer-checked:bg-accent2"></div>
+          </div>
+          <span class="font-ui text-sm text-slate-300">Fetch Fair Value <span class="text-xs text-slate-500">(slower)</span></span>
+        </label>
+      </div>
+      <div class="flex items-end">
+        <button id="btRunBtn" onclick="runBacktest()"
+          class="w-full px-5 py-2.5 rounded-lg font-ui font-600 text-sm
+                 bg-gradient-to-r from-accent2 to-accent text-base
+                 hover:shadow-lg hover:shadow-accent2/20 transition-all duration-200
+                 disabled:opacity-30 disabled:cursor-not-allowed
+                 flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z"/>
+          </svg>
+          <span id="btRunText">Run Backtest</span>
+          <span id="btRunSpinner" class="spinner-sm hidden"></span>
+        </button>
+      </div>
+    </div>
+    <p id="btStatusText" class="font-mono text-xs text-slate-500"></p>
+  </section>
+
+  <!-- Aggregate Stats (hidden until results) -->
+  <section id="btAggSection" class="hidden fade-slide">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+      <div class="bt-stat-card">
+        <p class="font-mono text-2xl font-700 text-white" id="btAggTrades">—</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Total Trades</p>
+      </div>
+      <div class="bt-stat-card">
+        <p class="font-mono text-2xl font-700 text-accent" id="btAggWinRate">—</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Win Rate</p>
+      </div>
+      <div class="bt-stat-card">
+        <p class="font-mono text-2xl font-700 text-accent2" id="btAggAvgWin">—</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Avg Win %</p>
+      </div>
+      <div class="bt-stat-card">
+        <p class="font-mono text-2xl font-700 text-danger" id="btAggAvgLoss">—</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Avg Loss %</p>
+      </div>
+      <div class="bt-stat-card">
+        <p class="font-mono text-2xl font-700 text-warn" id="btAggExpectancy">—</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Expectancy %</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bt-stat-card">
+        <p class="font-mono text-xl font-700 text-white" id="btAggTickersWithTrades">—</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Tickers w/ Trades</p>
+      </div>
+      <div class="bt-stat-card">
+        <p class="font-mono text-xl font-700 text-accent" id="btAggWins">—</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Wins</p>
+      </div>
+      <div class="bt-stat-card">
+        <p class="font-mono text-xl font-700 text-danger" id="btAggLosses">—</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Losses</p>
+      </div>
+      <div class="bt-stat-card">
+        <p class="font-mono text-xl font-700 text-warn" id="btAggTimeouts">—</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Timeouts</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Per-Ticker Results Table -->
+  <section id="btTickerSection" class="hidden fade-slide">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-border/50 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="text-lg">📈</span>
+          <h2 class="font-ui text-lg font-700 text-white">Per-Ticker Results</h2>
+          <span id="btTickerResultCount" class="font-mono text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full"></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-xs text-slate-500">Sort:</span>
+          <select id="btSortSelect" onchange="btSortTickerTable()"
+            class="bg-card2 border border-border/50 rounded-lg px-3 py-1 font-mono text-xs text-slate-300
+                   focus:outline-none focus:border-accent/50">
+            <option value="win_rate">Win Rate ↓</option>
+            <option value="total_return">Total Return ↓</option>
+            <option value="trades">Trades ↓</option>
+            <option value="expectancy">Expectancy ↓</option>
+          </select>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs font-ui font-600 text-slate-500 uppercase tracking-wider border-b border-border/30">
+              <th class="px-4 py-3">Ticker</th>
+              <th class="px-4 py-3">Trades</th>
+              <th class="px-4 py-3">Win Rate</th>
+              <th class="px-4 py-3">Avg Win</th>
+              <th class="px-4 py-3">Avg Loss</th>
+              <th class="px-4 py-3">Expectancy</th>
+              <th class="px-4 py-3">Total Return</th>
+              <th class="px-4 py-3">W / L / T</th>
+            </tr>
+          </thead>
+          <tbody id="btTickerTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- All Trades Table -->
+  <section id="btTradesSection" class="hidden fade-slide">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <!-- Top bar: title + controls -->
+      <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3 flex-wrap">
+        <!-- Left: title + counts — clicking here toggles collapse -->
+        <div class="flex items-center gap-3 cursor-pointer" onclick="btToggleTrades()">
+          <span class="text-lg">🗒️</span>
+          <h2 class="font-ui text-lg font-700 text-slate-300">All Trades Log</h2>
+          <span id="btTradeCount" class="font-mono text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full"></span>
+          <svg id="btTradesChevron" class="w-4 h-4 text-slate-500 transition-transform rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </div>
+
+        <!-- Right: sort + skipped toggle -->
+        <div class="ml-auto flex items-center gap-4 flex-wrap">
+          <!-- Sort dropdown -->
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-xs text-slate-500">Sort:</span>
+            <select id="btTradesSortSelect" onchange="btSortTradesTable()"
+              class="bg-card2 border border-border/50 rounded-lg px-3 py-1 font-mono text-xs text-slate-300
+                     focus:outline-none focus:border-accent/50">
+              <option value="date_asc">Entry Date ↑ (Oldest first)</option>
+              <option value="date_desc">Entry Date ↓ (Newest first)</option>
+              <option value="ticker_asc">Ticker A→Z</option>
+              <option value="ticker_desc">Ticker Z→A</option>
+              <option value="gain_desc">Gain % ↓ (Best first)</option>
+              <option value="gain_asc">Gain % ↑ (Worst first)</option>
+              <option value="days_asc">Days Held ↑</option>
+              <option value="days_desc">Days Held ↓</option>
+              <option value="entry_desc">Entry Price ↓</option>
+              <option value="entry_asc">Entry Price ↑</option>
+              <option value="fvgap_desc">FV Gap % ↓ (Most UV)</option>
+              <option value="fvgap_asc">FV Gap % ↑</option>
+              <option value="outcome_win">Wins first</option>
+              <option value="outcome_loss">Losses first</option>
+            </select>
+          </div>
+
+          <!-- Skipped toggle -->
+          <label class="flex items-center gap-2 cursor-pointer">
+            <div class="relative">
+              <input type="checkbox" id="btShowSkipped" class="sr-only peer" onchange="btToggleSkippedRows()">
+              <div class="w-9 h-5 bg-card2 border border-border/50 rounded-full peer
+                          peer-checked:bg-warn/20 peer-checked:border-warn/40 transition-all"></div>
+              <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-slate-500 rounded-full transition-all
+                          peer-checked:translate-x-4 peer-checked:bg-warn"></div>
+            </div>
+            <span class="font-ui text-xs text-slate-400">Show Skipped <span id="btSkippedCountBadge" class="font-mono text-warn"></span></span>
+          </label>
+        </div>
+      </div>
+
+      <div id="btTradesContent" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs font-ui font-600 text-slate-500 uppercase tracking-wider border-b border-border/30">
+              <th class="px-4 py-3 sortable-th" onclick="btTradesSetSort('ticker_asc','ticker_desc')">
+                Ticker <span class="sort-icon" id="tsh-ticker">⇅</span>
+              </th>
+              <th class="px-4 py-3">Type</th>
+              <th class="px-4 py-3 sortable-th" onclick="btTradesSetSort('date_asc','date_desc')">
+                Entry Date <span class="sort-icon" id="tsh-date">⇅</span>
+              </th>
+              <th class="px-4 py-3 sortable-th" onclick="btTradesSetSort('entry_asc','entry_desc')">
+                Entry ₹ <span class="sort-icon" id="tsh-entry">⇅</span>
+              </th>
+              <th class="px-4 py-3">Fair Value ₹</th>
+              <th class="px-4 py-3 sortable-th" onclick="btTradesSetSort('fvgap_asc','fvgap_desc')">
+                FV Gap % <span class="sort-icon" id="tsh-fvgap">⇅</span>
+              </th>
+              <th class="px-4 py-3">Trend</th>
+              <th class="px-4 py-3">Target ₹</th>
+              <th class="px-4 py-3">Exit Date</th>
+              <th class="px-4 py-3">Exit ₹</th>
+              <th class="px-4 py-3 sortable-th" onclick="btTradesSetSort('days_asc','days_desc')">
+                Days <span class="sort-icon" id="tsh-days">⇅</span>
+              </th>
+              <th class="px-4 py-3 sortable-th" onclick="btTradesSetSort('gain_desc','gain_asc')">
+                Gain % <span class="sort-icon" id="tsh-gain">⇅</span>
+              </th>
+              <th class="px-4 py-3 sortable-th" onclick="btTradesSetSort('outcome_win','outcome_loss')">
+                Outcome <span class="sort-icon" id="tsh-outcome">⇅</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody id="btTradesTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Failed Tickers -->
+  <section id="btFailedSection" class="hidden fade-slide">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3">
+        <span class="text-lg">⚠️</span>
+        <h2 class="font-ui text-sm font-700 text-slate-400">No-Data / Failed Tickers</h2>
+        <span id="btFailedCount" class="font-mono text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full"></span>
+      </div>
+      <div class="px-6 py-4">
+        <div id="btFailedTags" class="flex flex-wrap gap-2"></div>
+      </div>
+    </div>
+  </section>
+
+</div><!-- /backtestPanel -->
+
+</main>
+
+<!-- ═══════════════ CHART MODAL ═══════════════ -->
+<div id="chartModal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
+  <div class="glass-card rounded-2xl w-full max-w-5xl max-h-[90vh] mx-4 overflow-hidden flex flex-col">
+    <div class="px-6 py-4 border-b border-border/50 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span id="chartTicker" class="font-ui text-xl font-800 text-white"></span>
+        <span id="chartPrice" class="font-mono text-sm text-accent"></span>
+        <span id="chartTrend" class="font-mono text-xs px-2 py-0.5 rounded-full"></span>
+        <span id="chartSignalType" class="font-mono text-xs px-2 py-0.5 rounded-full"></span>
+      </div>
+      <button onclick="closeChart()" class="w-8 h-8 rounded-lg bg-card2 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="flex-1 overflow-auto p-4">
+      <div id="plotlyChart" style="width:100%;height:500px;"></div>
+    </div>
+    <div class="px-6 py-3 border-t border-border/50 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-mono text-slate-400">
+      <span>BO: <span id="chartBO" class="text-accent"></span></span>
+      <span>CF: <span id="chartCF" class="text-accent2"></span></span>
+      <span>Target 3%: <span id="chartTarget" class="glow-target"></span></span>
+      <span>FV: <span id="chartFV" class="text-slate-300"></span></span>
+      <span>EMA9: <span id="chartEMA9" class="text-accent2"></span></span>
+      <span>SMA50: <span id="chartSMA50" class="text-warn"></span></span>
+    </div>
+  </div>
+</div>
+
+<script>
+
+// ─── Clock ─────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleDateString('en-IN', { weekday:'short', day:'2-digit', month:'short' }) +
+    ' ' + now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+}
+updateClock();
+setInterval(updateClock, 30000);
+
+// ─── State ─────────────────────────────────────────────────
+let selectedFile = null;
+let lastResults  = null;
+let acTimeout    = null;
+let acIndex      = -1;
+
+// ─── Global signal store for row click → chart ─────────────
+let _allSignals = {};
+let _screenerPrimes = [];
+let _screenerOthers = [];
+
+function storeSignal(sig) {
+  _allSignals[sig.ticker] = sig;
+}
+
+// ─── Screener table sort ────────────────────────────────────
+function _sortSignalArray(arr, sortKey) {
+  return [...arr].sort((a, b) => {
+    switch (sortKey) {
+      case 'gap_desc':  return (b.gap_to_fair_pct ?? -999) - (a.gap_to_fair_pct ?? -999);
+      case 'gap_asc':   return (a.gap_to_fair_pct ?? 999)  - (b.gap_to_fair_pct ?? 999);
+      case 'candles_asc':  return (a.candles_ago ?? 999) - (b.candles_ago ?? 999);
+      case 'candles_desc': return (b.candles_ago ?? 0)   - (a.candles_ago ?? 0);
+      case 'price_desc': return (b.current_price ?? 0) - (a.current_price ?? 0);
+      case 'price_asc':  return (a.current_price ?? 0) - (b.current_price ?? 0);
+      default: return 0;
+    }
+  });
+}
+
+function sortScreenerTable(table) {
+  if (table === 'prime') {
+    const key    = document.getElementById('primeSortSelect').value;
+    const sorted = _sortSignalArray(_screenerPrimes, key);
+    document.getElementById('primeTableBody').innerHTML = sorted.map(s => buildRow(s, true)).join('');
+  } else {
+    const key    = document.getElementById('otherSortSelect').value;
+    const sorted = _sortSignalArray(_screenerOthers, key);
+    document.getElementById('otherTableBody').innerHTML = sorted.map(s => buildRow(s, false)).join('');
+  }
+}
+
+// ─── Chartink table sort ────────────────────────────────────
+// Reads from the live CK store to re-render with chosen sort
+function sortChartinkTable(table) {
+  const store = _ckLoadStore();
+  const meta  = _ckLoadMeta();
+  const allEntries = Object.values(store);
+  if (table === 'prime') {
+    const key    = document.getElementById('chartinkPrimeSortSelect').value;
+    const primes = _sortSignalArray(allEntries.filter(s => s._isPrime), key);
+    document.getElementById('chartinkPrimeTableBody').innerHTML =
+      primes.map(s => _buildCkStoreRow(s, true, meta)).join('');
+  } else {
+    const key    = document.getElementById('chartinkOtherSortSelect').value;
+    const others = _sortSignalArray(allEntries.filter(s => !s._isPrime), key);
+    document.getElementById('chartinkOtherTableBody').innerHTML =
+      others.map(s => _buildCkStoreRow(s, false, meta)).join('');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  QUICK SCAN
+// ═══════════════════════════════════════════════════════════
+
+const tickerInput  = document.getElementById('tickerInput');
+const quickScanBtn = document.getElementById('quickScanBtn');
+
+tickerInput.addEventListener('keydown', e => {
+  const dropdown = document.getElementById('autocompleteDropdown');
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (!dropdown.classList.contains('hidden') && acIndex >= 0) {
+      const items = dropdown.querySelectorAll('.autocomplete-item');
+      if (items[acIndex]) {
+        tickerInput.value = items[acIndex].dataset.symbol;
+        dropdown.classList.add('hidden');
+      }
+    }
+    runQuickScan();
+  } else if (e.key === 'ArrowDown') { e.preventDefault(); navigateAC(1); }
+  else if (e.key === 'ArrowUp')   { e.preventDefault(); navigateAC(-1); }
+  else if (e.key === 'Escape')    { dropdown.classList.add('hidden'); }
+});
+
+tickerInput.addEventListener('input', () => {
+  clearTimeout(acTimeout);
+  const q = tickerInput.value.trim();
+  if (q.length < 1) { document.getElementById('autocompleteDropdown').classList.add('hidden'); return; }
+  acTimeout = setTimeout(() => fetchAutocomplete(q), 200);
+});
+
+tickerInput.addEventListener('blur', () => {
+  setTimeout(() => document.getElementById('autocompleteDropdown').classList.add('hidden'), 200);
+});
+
+async function fetchAutocomplete(q) {
+  try {
+    const resp = await fetch(`/api/ema9/tickers?q=${encodeURIComponent(q)}`);
+    const data = await resp.json();
+    renderAutocomplete(data.tickers || []);
+  } catch { document.getElementById('autocompleteDropdown').classList.add('hidden'); }
+}
+
+function renderAutocomplete(tickers) {
+  const dropdown = document.getElementById('autocompleteDropdown');
+  acIndex = -1;
+  if (!tickers.length) { dropdown.classList.add('hidden'); return; }
+  dropdown.innerHTML = tickers.map((t, i) =>
+    `<div class="autocomplete-item" data-symbol="${t.symbol}" data-index="${i}"
+          onmousedown="selectAC('${t.symbol}')">
+      <span class="sym">${t.symbol}</span><span class="nam">${t.name || ''}</span>
+    </div>`
+  ).join('');
+  dropdown.classList.remove('hidden');
+}
+
+function selectAC(symbol) {
+  tickerInput.value = symbol;
+  document.getElementById('autocompleteDropdown').classList.add('hidden');
+  runQuickScan();
+}
+
+function navigateAC(dir) {
+  const dropdown = document.getElementById('autocompleteDropdown');
+  const items = dropdown.querySelectorAll('.autocomplete-item');
+  if (!items.length) return;
+  acIndex = Math.max(0, Math.min(items.length - 1, acIndex + dir));
+  items.forEach((el, i) => el.classList.toggle('active', i === acIndex));
+}
+
+quickScanBtn.addEventListener('click', runQuickScan);
+
+async function runQuickScan() {
+  const ticker = tickerInput.value.trim().toUpperCase();
+  if (!ticker) return;
+
+  const btn     = quickScanBtn;
+  const txt     = document.getElementById('quickScanText');
+  const spinner = document.getElementById('quickScanSpinner');
+
+  btn.disabled = true; txt.textContent = 'Scanning...'; spinner.classList.remove('hidden');
+
+  try {
+    const resp = await fetch(`/api/ema9/quick-scan/${encodeURIComponent(ticker)}`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    storeSignal(data);
+    renderQuickScanResult(data);
+  } catch (err) {
+    document.getElementById('quickScanResult').innerHTML = `
+      <div class="scan-card nodata bg-card2 rounded-xl p-5">
+        <div class="flex items-center gap-3">
+          <svg class="w-5 h-5 text-danger" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd"/></svg>
+          <span class="font-ui text-sm text-danger">Error: ${err.message}</span>
+        </div>
+      </div>`;
+    document.getElementById('quickScanResult').classList.remove('hidden');
+  } finally {
+    btn.disabled = false; txt.textContent = 'Scan'; spinner.classList.add('hidden');
+  }
+}
+
+function renderQuickScanResult(s) {
+  const container = document.getElementById('quickScanResult');
+  container.classList.remove('hidden');
+
+  if (s.status === 'NO_DATA') {
+    container.innerHTML = `
+      <div class="scan-card nodata bg-card2 rounded-xl p-5">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="font-ui text-lg font-700 text-slate-400">${s.ticker}</span>
+          <span class="badge-nodata font-mono text-xs px-2 py-0.5 rounded-full">NO DATA</span>
+        </div>
+        <p class="font-mono text-xs text-slate-500">${s.error || 'Insufficient price history'}</p>
+      </div>`;
+    return;
+  }
+
+  if (s.status === 'NO_SIGNAL') {
+    const trendRegime = s.trend_regime || '—';
+    container.innerHTML = `
+      <div class="scan-card nodata bg-card2 rounded-xl p-5">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="font-ui text-lg font-700 text-slate-300">${s.ticker}</span>
+          <span class="font-mono text-sm text-slate-400">₹${fmtNum(s.current_price)}</span>
+          <span class="font-mono text-xs px-2 py-0.5 rounded-full ${getTrendBadgeClass(trendRegime)}">${trendRegime}</span>
+          <span class="badge-nosignal font-mono text-xs px-2 py-0.5 rounded-full">NO 9EMA SIGNAL</span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+          <div><span class="text-slate-500">EMA 9</span><br><span class="text-slate-300">₹${fmtNum(s.ema9_value)}</span></div>
+          <div><span class="text-slate-500">SMA 50</span><br><span class="text-slate-300">₹${fmtNum(s.sma50_value)}</span></div>
+          <div><span class="text-slate-500">Above 50 SMA</span><br><span class="${s.above_sma50 ? 'text-accent' : 'text-danger'}">${s.above_sma50 ? 'Yes' : 'No'}</span></div>
+          <div><span class="text-slate-500">3% Target</span><br><span class="text-slate-400">₹${fmtNum(s.target_3pct)}</span></div>
+        </div>
+        ${buildFVSection(s)}
+      </div>`;
+    return;
+  }
+
+  // SIGNAL
+  const isPrime   = s.signal_type === 'PRIME';
+  const cardClass = isPrime ? 'prime' : 'tech';
+  const typeLabel = isPrime ? 'PRIME TARGET' : 'TECHNICAL ONLY';
+  const typeBadge = isPrime ? 'badge-prime' : 'badge-technical';
+  const trendRegime = s.trend_regime || '—';
+  const nearing    = s.target_nearing;
+
+  container.innerHTML = `
+    <div class="scan-card ${cardClass} bg-card2 rounded-xl p-5">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="font-ui text-lg font-700 text-white">${s.ticker}</span>
+        <span class="font-mono text-sm text-accent">₹${fmtNum(s.current_price)}</span>
+        <span class="font-mono text-xs px-2 py-0.5 rounded-full ${getTrendBadgeClass(trendRegime)}">${trendRegime}</span>
+        <span class="font-mono text-xs px-2 py-0.5 rounded-full ${typeBadge}">${typeLabel}</span>
+        ${nearing ? '<span class="badge-nearing font-mono text-xs px-2 py-0.5 rounded-full pulse-warn">TARGET NEARING</span>' : ''}
+        <button onclick='openChart(${JSON.stringify(s).replace(/'/g, "&#39;")})'
+          class="ml-auto px-3 py-1 rounded-md bg-card border border-border/50 text-xs font-ui text-slate-400 hover:text-accent hover:border-accent/30 transition-all">
+          View Chart
+        </button>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono">
+        <div class="bg-card rounded-lg p-3">
+          <span class="text-slate-500 block mb-1">3% Target</span>
+          <span class="glow-target text-base font-700">₹${fmtNum(s.target_3pct)}</span>
+        </div>
+        <div class="bg-card rounded-lg p-3">
+          <span class="text-slate-500 block mb-1">Breakout</span>
+          <span class="text-accent">${s.breakout_date}</span>
+          <span class="text-slate-500 ml-1">@ ₹${fmtNum(s.breakout_close)}</span>
+        </div>
+        <div class="bg-card rounded-lg p-3">
+          <span class="text-slate-500 block mb-1">Confirmation</span>
+          <span class="text-accent2">${s.confirm_date}</span>
+          <span class="text-slate-500 ml-1">@ ₹${fmtNum(s.confirm_close)}</span>
+        </div>
+        <div class="bg-card rounded-lg p-3">
+          <span class="text-slate-500 block mb-1">Candles Ago</span>
+          <span class="text-white text-base font-700">${s.candles_ago}</span>
+        </div>
+      </div>
+      <div class="mt-3 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs font-mono">
+        <div><span class="text-slate-500">EMA 9</span><br><span class="text-accent2">₹${fmtNum(s.ema9_value)}</span></div>
+        <div><span class="text-slate-500">SMA 50</span><br><span class="text-warn">₹${fmtNum(s.sma50_value)}</span></div>
+        <div><span class="text-slate-500">EMA Dist</span><br><span class="text-slate-300">${s.ema9_dist_pct}%</span></div>
+        <div><span class="text-slate-500">Fair Value</span><br><span class="text-slate-300">${s.composite_fair_price ? '₹' + fmtNum(s.composite_fair_price) : 'N/A'}</span></div>
+        <div><span class="text-slate-500">Gap to FV</span><br><span class="${(s.gap_to_fair_pct||0)>=0 ? 'text-accent' : 'text-danger'}">${s.gap_to_fair_pct != null ? (s.gap_to_fair_pct >= 0 ? '+' : '') + s.gap_to_fair_pct.toFixed(1) + '%' : '—'}</span></div>
+      </div>
+      ${buildFVSection(s)}
+    </div>`;
+}
+
+
+// ─── FV Section Builder (reused in quick scan results) ─────
+function buildFVSection(s) {
+  const hasFV = s.composite_fair_price != null;
+  const fvError = s.fv_error || null;
+
+  if (hasFV) return '';  // FV is fine, no section needed
+
+  let errorHint = '';
+  if (fvError) {
+    // Make error more readable
+    if (fvError.includes('SMA_ERROR'))       errorHint = 'Screener.in returned an error for this stock';
+    else if (fvError.includes('NO_COMPOSITE')) errorHint = 'Valuation models could not compute a composite price';
+    else if (fvError.includes('RETRY_EXHAUSTED')) errorHint = 'FV fetch failed after multiple retries';
+    else if (fvError.includes('NOT_AVAILABLE'))   errorHint = 'FV engine unavailable';
+    else errorHint = fvError.substring(0, 80);
+  }
+
+  return `
+    <div class="mt-3 pt-3 border-t border-border/30">
+      <div class="flex items-center gap-3">
+        <span class="badge-fv-missing font-mono text-xs px-2 py-0.5 rounded-full">FV UNAVAILABLE</span>
+        ${errorHint ? `<span class="font-mono text-xs text-slate-600 fv-error-tip" data-error="${errorHint}">${errorHint.substring(0, 50)}${errorHint.length > 50 ? '...' : ''}</span>` : ''}
+        <button onclick="fetchFVForTicker('${s.ticker}', this)" class="fv-fetch-btn font-mono">
+          Fetch FV
+        </button>
+      </div>
+    </div>`;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  ON-DEMAND FV FETCH
+// ═══════════════════════════════════════════════════════════
+
+async function fetchFVForTicker(ticker, btnEl) {
+  if (!ticker) return;
+  const origText = btnEl.textContent;
+  btnEl.disabled = true;
+  btnEl.innerHTML = '<span class="spinner-sm"></span>';
+
+  try {
+    const resp = await fetch(`/api/ema9/fair-value/${encodeURIComponent(ticker)}`);
+    const data = await resp.json();
+
+    if (data.status === 'OK' && data.composite_fair_price) {
+      // Update the stored signal
+      if (_allSignals[ticker]) {
+        _allSignals[ticker].composite_fair_price = data.composite_fair_price;
+        _allSignals[ticker].composite_gain_pct   = data.composite_gain_pct;
+        _allSignals[ticker].fair_gap_pct         = data.fair_gap_pct;
+        _allSignals[ticker].valuation_bucket     = data.valuation_bucket;
+        _allSignals[ticker].fv_model_count       = data.fv_model_count;
+        _allSignals[ticker].gap_to_fair_pct      = data.gap_to_fair_pct;
+        _allSignals[ticker].fv_error             = null;
+      }
+
+      // Update all table cells with this ticker
+      updateFVInTables(ticker, data);
+
+      // Update quick scan result if visible
+      const qsResult = document.getElementById('quickScanResult');
+      if (!qsResult.classList.contains('hidden') && _allSignals[ticker]) {
+        renderQuickScanResult(_allSignals[ticker]);
+      }
+
+      btnEl.textContent = 'Done ✓';
+      btnEl.style.color = '#00e5a0';
+      btnEl.style.borderColor = 'rgba(0,229,160,0.3)';
+      setTimeout(() => { btnEl.textContent = 'Fetch FV'; btnEl.style.color = ''; btnEl.style.borderColor = ''; }, 2000);
+    } else {
+      const errMsg = data.fv_error || 'Unknown error';
+      btnEl.textContent = 'Failed';
+      btnEl.style.color = '#ef4444';
+      btnEl.title = errMsg;
+      setTimeout(() => { btnEl.textContent = 'Retry'; btnEl.style.color = ''; btnEl.disabled = false; }, 2000);
+    }
+  } catch (err) {
+    btnEl.textContent = 'Error';
+    btnEl.style.color = '#ef4444';
+    setTimeout(() => { btnEl.textContent = 'Fetch FV'; btnEl.style.color = ''; btnEl.disabled = false; }, 2000);
+  }
+}
+
+
+function updateFVInTables(ticker, fvData) {
+  // Find all FV cells for this ticker and update them
+  document.querySelectorAll(`tr[data-ticker="${ticker}"]`).forEach(row => {
+    const fvCell     = row.querySelector('.fv-cell');
+    const gapCell    = row.querySelector('.fv-gap-cell');
+    const fetchCell  = row.querySelector('.fv-fetch-cell');
+
+    if (fvCell) {
+      fvCell.innerHTML = `<span class="font-mono text-slate-300">₹${fmtNum(fvData.composite_fair_price)}</span>`;
+    }
+    if (gapCell) {
+      const gap = fvData.gap_to_fair_pct;
+      gapCell.innerHTML = gap != null
+        ? `<span class="font-mono ${gap >= 0 ? 'text-accent' : 'text-danger'}">${(gap >= 0 ? '+' : '') + gap.toFixed(1)}%</span>`
+        : '—';
+    }
+    if (fetchCell) {
+      fetchCell.innerHTML = '<span class="font-mono text-xs text-accent">✓</span>';
+    }
+  });
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  CSV UPLOAD
+// ═══════════════════════════════════════════════════════════
+
+const dropZone  = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+
+function handleFile(file) {
+  if (!file.name.toLowerCase().endsWith('.csv')) { setCsvStatus('Only .csv files accepted', 'danger'); return; }
+  selectedFile = file;
+  document.getElementById('fileInfo').classList.remove('hidden');
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileTickerCount').textContent = '';
+  document.getElementById('screenBtn').disabled = false;
+  setCsvStatus('Ready to screen');
+}
+
+document.getElementById('clearFile').addEventListener('click', () => {
+  selectedFile = null; fileInput.value = '';
+  document.getElementById('fileInfo').classList.add('hidden');
+  document.getElementById('screenBtn').disabled = true;
+  setCsvStatus('');
+});
+
+document.getElementById('screenBtn').addEventListener('click', runCsvScreen);
+
+async function runCsvScreen() {
+  if (!selectedFile) return;
+  const btn     = document.getElementById('screenBtn');
+  const txt     = document.getElementById('screenBtnText');
+  const spinner = document.getElementById('screenBtnSpinner');
+
+  btn.disabled = true; txt.textContent = 'Processing...'; spinner.classList.remove('hidden');
+  setCsvStatus('Uploading CSV & running screener...');
+
+  try {
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    const resp = await fetch('/api/ema9/upload-csv', { method: 'POST', body: formData });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    lastResults = data;
+    renderResults(data);
+    setCsvStatus(`Done — ${data.count} signals found`, 'success');
+  } catch (err) {
+    setCsvStatus('Error: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = false; txt.textContent = 'Process & Screen'; spinner.classList.add('hidden');
+  }
+}
+
+function setCsvStatus(msg, type='info') {
+  const el = document.getElementById('csvStatusText');
+  el.textContent = msg;
+  el.className = 'font-mono text-xs ' + ({ info:'text-slate-500', danger:'text-danger', success:'text-accent' }[type] || 'text-slate-500');
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER BATCH RESULTS
+// ═══════════════════════════════════════════════════════════
+
+function renderResults(data) {
+  document.getElementById('summarySection').classList.remove('hidden');
+  document.getElementById('statTotal').textContent     = data.count || 0;
+  document.getElementById('statPrime').textContent     = data.prime_count || 0;
+  document.getElementById('statOther').textContent     = data.other_count || 0;
+  document.getElementById('statFiltered').textContent  = (data.filtered_by_trend || []).length;
+  document.getElementById('statFailed').textContent    = (data.failed || []).length;
+  document.getElementById('statFvMissing').textContent = (data.fv_failures || []).length;
+
+  if (data.csv_info) {
+    document.getElementById('fileTickerCount').textContent =
+      `${data.csv_info.parsed_tickers} tickers from "${data.csv_info.found_column}"`;
+  }
+
+  // Store all signals for chart access
+  const primes = data.prime_targets || [];
+  const others = data.other_signals || [];
+  [...primes, ...others].forEach(storeSignal);
+
+  // Store raw arrays for sort
+  _screenerPrimes = [...primes];
+  _screenerOthers = [...others];
+
+  // Prime table — sorted by gap_to_fair_pct desc (most undervalued) by default
+  if (primes.length) {
+    document.getElementById('primeSection').classList.remove('hidden');
+    document.getElementById('primeCount').textContent = primes.length;
+    sortScreenerTable('prime');
+  } else {
+    document.getElementById('primeSection').classList.add('hidden');
+  }
+
+  // Other table — sorted by candles_ago asc (freshest) by default
+  if (others.length) {
+    document.getElementById('otherSection').classList.remove('hidden');
+    document.getElementById('otherCount').textContent = others.length;
+    sortScreenerTable('other');
+  } else {
+    document.getElementById('otherSection').classList.add('hidden');
+  }
+
+  // Failed / filtered
+  const filtered = data.filtered_by_trend || [];
+  const failed   = data.failed || [];
+  if (filtered.length || failed.length) {
+    document.getElementById('failedSection').classList.remove('hidden');
+    document.getElementById('failedCount').textContent = filtered.length + failed.length;
+    if (filtered.length) {
+      document.getElementById('filteredByTrend').classList.remove('hidden');
+      document.getElementById('filteredTags').innerHTML = filtered.map(f =>
+        `<span class="font-mono text-xs px-2 py-1 rounded bg-card2 text-slate-400">${f.ticker} <span class="text-slate-600">${f.trend_regime}</span></span>`
+      ).join('');
+    }
+    if (failed.length) {
+      document.getElementById('failedList').classList.remove('hidden');
+      document.getElementById('failedTags').innerHTML = failed.map(f =>
+        `<span class="font-mono text-xs px-2 py-1 rounded bg-card2 text-slate-500" title="${f.error || ''}">${f.ticker}</span>`
+      ).join('');
+    }
+  } else {
+    document.getElementById('failedSection').classList.add('hidden');
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  TABLE ROW BUILDER
+// ═══════════════════════════════════════════════════════════
+
+function buildRow(s, isPrime) {
+  const hasFV   = s.composite_fair_price != null;
+  const fvError = s.fv_error || null;
+
+  // FV cell content
+  let fvCellHTML;
+  if (hasFV) {
+    fvCellHTML = `<span class="font-mono text-slate-300">₹${fmtNum(s.composite_fair_price)}</span>`;
+  } else {
+    const errShort = fvError ? fvError.substring(0, 40) : 'N/A';
+    fvCellHTML = `<span class="fv-error-tip font-mono text-slate-600" data-error="${fvError || 'Unknown'}">—</span>`;
+  }
+
+  // Gap cell
+  const gapFv      = s.gap_to_fair_pct;
+  const gapFvStr   = gapFv != null ? (gapFv >= 0 ? '+' : '') + gapFv.toFixed(1) + '%' : '—';
+  const gapFvClass = gapFv != null ? (gapFv >= 0 ? 'text-accent' : 'text-danger') : 'text-slate-600';
+
+  // FV fetch button
+  let fvFetchHTML;
+  if (hasFV) {
+    fvFetchHTML = '';
+  } else {
+    fvFetchHTML = `<button onclick="event.stopPropagation(); fetchFVForTicker('${s.ticker}', this)" class="fv-fetch-btn">FV</button>`;
+  }
+
+  const trendRegime = s.trend_regime || '—';
+  const trendClass  = getTrendBadgeClass(trendRegime);
+  const nearing     = s.target_nearing;
+  const statusBadge = nearing
+    ? '<span class="badge-nearing font-mono text-xs px-2 py-0.5 rounded-full pulse-warn">NEARING</span>'
+    : '<span class="badge-fresh font-mono text-xs px-2 py-0.5 rounded-full">FRESH</span>';
+  const targetClass = isPrime ? 'glow-target font-mono font-600' : 'font-mono text-slate-300';
+
+  return `
+    <tr class="signal-row border-b border-border/20" data-ticker="${s.ticker}" onclick='openChartForTicker("${s.ticker}")'>
+      <td class="px-4 py-3 font-ui font-700 text-white">${s.ticker}</td>
+      <td class="px-4 py-3 font-mono text-slate-300">₹${fmtNum(s.current_price)}</td>
+      <td class="px-4 py-3 ${targetClass}">₹${fmtNum(s.target_3pct)}</td>
+      <td class="px-4 py-3 font-mono text-accent2">₹${fmtNum(s.ema9_value)}</td>
+      <td class="px-4 py-3 font-mono text-warn">₹${fmtNum(s.sma50_value)}</td>
+      <td class="px-4 py-3 fv-cell">${fvCellHTML} ${fvFetchHTML}</td>
+      <td class="px-4 py-3 fv-gap-cell font-mono ${gapFvClass}">${gapFvStr}</td>
+      <td class="px-4 py-3 font-mono text-slate-500 text-xs">${s.breakout_date || '—'}</td>
+      <td class="px-4 py-3 font-mono text-slate-500 text-xs">${s.confirm_date || '—'}</td>
+      <td class="px-4 py-3 font-mono text-slate-400">${s.candles_ago}</td>
+      <td class="px-4 py-3"><span class="font-mono text-xs px-2 py-0.5 rounded ${trendClass}">${trendRegime}</span></td>
+      <td class="px-4 py-3">${statusBadge}</td>
+    </tr>`;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════
+
+function fmtNum(v) {
+  if (v == null) return '—';
+  return Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function getTrendBadgeClass(regime) {
+  return { 'UPTREND':'badge-uptrend', 'SIDEWAYS':'badge-sideways', 'DOWNTREND':'badge-downtrend' }[regime] || '';
+}
+
+function toggleFailed() {
+  const c  = document.getElementById('failedContent');
+  const ch = document.getElementById('failedChevron');
+  c.classList.toggle('hidden');
+  ch.style.transform = c.classList.contains('hidden') ? '' : 'rotate(180deg)';
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  CHART MODAL
+// ═══════════════════════════════════════════════════════════
+
+function openChartForTicker(ticker) {
+  const sig = _allSignals[ticker];
+  if (sig) openChart(sig);
+}
+
+function openChart(signal) {
+  const modal = document.getElementById('chartModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  document.getElementById('chartTicker').textContent = signal.ticker;
+  document.getElementById('chartPrice').textContent  = '₹' + fmtNum(signal.current_price);
+
+  const trendRegime = signal.trend_regime || '—';
+  const trendEl = document.getElementById('chartTrend');
+  trendEl.textContent = trendRegime;
+  trendEl.className = 'font-mono text-xs px-2 py-0.5 rounded-full ' + getTrendBadgeClass(trendRegime);
+
+  const sigType = signal.signal_type || '';
+  const sigEl = document.getElementById('chartSignalType');
+  if (sigType === 'PRIME') {
+    sigEl.textContent = 'PRIME'; sigEl.className = 'font-mono text-xs px-2 py-0.5 rounded-full badge-prime';
+  } else if (sigType === 'TECHNICAL_ONLY') {
+    sigEl.textContent = 'TECHNICAL'; sigEl.className = 'font-mono text-xs px-2 py-0.5 rounded-full badge-technical';
+  } else {
+    sigEl.textContent = ''; sigEl.className = 'hidden';
+  }
+
+  document.getElementById('chartBO').textContent     = signal.breakout_date + ' @ ₹' + fmtNum(signal.breakout_close);
+  document.getElementById('chartCF').textContent     = signal.confirm_date + ' @ ₹' + fmtNum(signal.confirm_close);
+  document.getElementById('chartTarget').textContent = '₹' + fmtNum(signal.target_3pct);
+  document.getElementById('chartFV').textContent     = signal.composite_fair_price ? '₹' + fmtNum(signal.composite_fair_price) : 'N/A';
+  document.getElementById('chartEMA9').textContent   = '₹' + fmtNum(signal.ema9_value);
+  document.getElementById('chartSMA50').textContent  = '₹' + fmtNum(signal.sma50_value);
+
+  const candles = signal.candles || [];
+  if (!candles.length) return;
+
+  const dates  = candles.map(c => c.date);
+  const opens  = candles.map(c => c.open);
+  const highs  = candles.map(c => c.high);
+  const lows   = candles.map(c => c.low);
+  const closes = candles.map(c => c.close);
+  const ema9   = candles.map(c => c.ema9);
+  const sma50  = candles.map(c => c.sma50);
+
+  const boIdx = candles.findIndex(c => c.is_breakout);
+  const cfIdx = candles.findIndex(c => c.is_confirm);
+
+  const traces = [
+    { type: 'candlestick', x: dates, open: opens, high: highs, low: lows, close: closes,
+      name: 'OHLC', increasing: { line: { color: '#00e5a0' } }, decreasing: { line: { color: '#ef4444' } } },
+    { type: 'scatter', mode: 'lines', x: dates, y: ema9, name: '9 EMA', line: { color: '#00b8d4', width: 1.5 } },
+    { type: 'scatter', mode: 'lines', x: dates, y: sma50, name: '50 SMA', line: { color: '#f59e0b', width: 1.5, dash: 'dot' } },
+  ];
+
+  if (boIdx >= 0) {
+    traces.push({ type: 'scatter', mode: 'markers+text', x: [dates[boIdx]], y: [lows[boIdx] * 0.995],
+      text: ['BO'], textposition: 'bottom center', textfont: { color: '#00e5a0', size: 11, family: 'JetBrains Mono' },
+      marker: { color: '#00e5a0', size: 12, symbol: 'triangle-up' }, name: 'Breakout' });
+  }
+  if (cfIdx >= 0) {
+    traces.push({ type: 'scatter', mode: 'markers+text', x: [dates[cfIdx]], y: [lows[cfIdx] * 0.995],
+      text: ['CF'], textposition: 'bottom center', textfont: { color: '#00b8d4', size: 11, family: 'JetBrains Mono' },
+      marker: { color: '#00b8d4', size: 12, symbol: 'diamond' }, name: 'Confirmation' });
+  }
+  if (signal.target_3pct) {
+    traces.push({ type: 'scatter', mode: 'lines', x: [dates[0], dates[dates.length-1]], y: [signal.target_3pct, signal.target_3pct],
+      name: '3% Target', line: { color: '#00e5a0', width: 1, dash: 'dashdot' } });
+  }
+  if (signal.composite_fair_price) {
+    traces.push({ type: 'scatter', mode: 'lines', x: [dates[0], dates[dates.length-1]], y: [signal.composite_fair_price, signal.composite_fair_price],
+      name: 'Fair Value', line: { color: '#a78bfa', width: 1, dash: 'longdash' } });
+  }
+
+  Plotly.newPlot('plotlyChart', traces, {
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: '#0a1628',
+    font: { family: 'Exo 2', color: '#94a3b8', size: 11 },
+    margin: { l: 60, r: 20, t: 30, b: 40 },
+    xaxis: { type: 'date', gridcolor: '#1a2d4a', linecolor: '#1a2d4a', tickfont: { family: 'JetBrains Mono', size: 10 } },
+    yaxis: { gridcolor: '#1a2d4a', linecolor: '#1a2d4a', tickfont: { family: 'JetBrains Mono', size: 10 }, title: { text: '₹', font: { size: 11 } } },
+    legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.12, font: { size: 10 }, bgcolor: 'rgba(0,0,0,0)' },
+    showlegend: true, dragmode: 'zoom',
+  }, { responsive: true, displayModeBar: true, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
+}
+
+function closeChart() {
+  document.getElementById('chartModal').classList.add('hidden');
+  document.getElementById('chartModal').classList.remove('flex');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChart(); });
+document.getElementById('chartModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeChart(); });
+
+
+// ═══════════════════════════════════════════════════════════
+//  TAB SWITCHING
+// ═══════════════════════════════════════════════════════════
+
+function switchTab(tab) {
+  const screenerPanel = document.getElementById('screenerPanel');
+  const backtestPanel = document.getElementById('backtestPanel');
+  const chartinkPanel = document.getElementById('chartinkPanel');
+  const tabScreener   = document.getElementById('tabScreener');
+  const tabBacktest   = document.getElementById('tabBacktest');
+  const tabChartink   = document.getElementById('tabChartink');
+
+  screenerPanel.classList.add('hidden');
+  backtestPanel.classList.add('hidden');
+  chartinkPanel.classList.add('hidden');
+  tabScreener.classList.remove('active');
+  tabBacktest.classList.remove('active');
+  tabChartink.classList.remove('active');
+
+  if (tab === 'screener') {
+    screenerPanel.classList.remove('hidden');
+    tabScreener.classList.add('active');
+  } else if (tab === 'backtest') {
+    backtestPanel.classList.remove('hidden');
+    tabBacktest.classList.add('active');
+  } else if (tab === 'chartink') {
+    chartinkPanel.classList.remove('hidden');
+    tabChartink.classList.add('active');
+    fetchChartinkResults();   // immediate refresh on tab open; background polling already running
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  BACKTEST — STATE
+// ═══════════════════════════════════════════════════════════
+
+let _btTickers    = [];   // list of ticker strings
+let _btResults    = null; // last API response
+let _btAllTradesRaw = { trades: [], skipped: [] }; // cached for re-sort
+let _btTradesSortKey = 'date_asc';  // current active sort for trades log
+let _fvYearlyCache = {};  // ticker → { yearly: {op, sales}, fetched: bool }
+
+// ─── Year-wise FV helpers ───────────────────────────────────────────────────
+// Fetch /api/fv/fair-value/{ticker}/yearly and cache it.
+async function _fetchYearlyFV(ticker) {
+  if (_fvYearlyCache[ticker]?.fetched) return _fvYearlyCache[ticker];
+  try {
+    const resp = await fetch(`/api/fv/fair-value/${encodeURIComponent(ticker)}/yearly`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    _fvYearlyCache[ticker] = { fetched: true, yearly: data.yearly || null };
+  } catch(e) {
+    _fvYearlyCache[ticker] = { fetched: true, yearly: null, error: e.message };
+  }
+  return _fvYearlyCache[ticker];
+}
+
+// Given a trade entry_date (YYYY-MM-DD) and yearly FV cache entry, return
+// the best fair_value for that year (OP model preferred, Sales as fallback).
+// Fiscal Year logic: April–March. A Jan-2025 entry belongs to FY2024 (Apr24–Mar25).
+function _getFVForTrade(entry_date, yearlyCache) {
+  if (!yearlyCache?.yearly) return { fair_value: null, fv_source: null };
+  const d = new Date(entry_date);
+  // Convert calendar date → FY year (Apr start).  Jan 2025 → FY 2024.
+  let fy = d.getFullYear();
+  if (d.getMonth() < 3) fy -= 1;  // Jan,Feb,Mar → previous FY
+
+  const op    = yearlyCache.yearly?.op;
+  const sales = yearlyCache.yearly?.sales;
+
+  // Try OP model data first
+  if (op?.data) {
+    // Find the row with matching FY year
+    const row = op.data.find(r => r.year === fy);
+    if (row?.fair_value) {
+      const gap = row.fair_value && row.price
+        ? parseFloat(((row.fair_value - row.price) / row.price * 100).toFixed(2))
+        : null;
+      return { fair_value: row.fair_value, actual_price: row.price, fv_gap_pct: gap, fv_source: 'OP', fy };
+    }
+  }
+  // Fallback: Sales model
+  if (sales?.data) {
+    const row = sales.data.find(r => r.year === fy);
+    if (row?.fair_value) {
+      const gap = row.fair_value && row.price
+        ? parseFloat(((row.fair_value - row.price) / row.price * 100).toFixed(2))
+        : null;
+      return { fair_value: row.fair_value, actual_price: row.price, fv_gap_pct: gap, fv_source: 'Sales', fy };
+    }
+  }
+  // Try adjacent year (FY+1) in case data is one-year shifted
+  for (const adj of [fy + 1, fy - 1]) {
+    if (op?.data) {
+      const row = op.data.find(r => r.year === adj);
+      if (row?.fair_value) {
+        const gap = row.fair_value && row.price
+          ? parseFloat(((row.fair_value - row.price) / row.price * 100).toFixed(2))
+          : null;
+        return { fair_value: row.fair_value, actual_price: row.price, fv_gap_pct: gap, fv_source: `OP~${adj}`, fy: adj };
+      }
+    }
+  }
+  return { fair_value: null, fv_source: null, fy };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  BACKTEST — TICKER MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+
+document.getElementById('btTickerInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); btAddTicker(); }
+});
+
+function btAddTicker() {
+  const input = document.getElementById('btTickerInput');
+  const raw   = input.value.trim().toUpperCase().replace(/\.NS|\.BO/g, '');
+  if (!raw) return;
+  const tickers = raw.split(/[\s,;]+/).filter(Boolean);
+  tickers.forEach(t => { if (!_btTickers.includes(t)) _btTickers.push(t); });
+  input.value = '';
+  btRenderChips();
+}
+
+function btRemoveTicker(t) {
+  _btTickers = _btTickers.filter(x => x !== t);
+  btRenderChips();
+}
+
+function btRenderChips() {
+  const container = document.getElementById('btTickerChips');
+  container.innerHTML = _btTickers.map(t =>
+    `<span class="ticker-chip" onclick="btRemoveTicker('${t}')">
+      ${t} <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </span>`
+  ).join('');
+  document.getElementById('btTickerCount').textContent =
+    _btTickers.length ? `${_btTickers.length} ticker${_btTickers.length > 1 ? 's' : ''} queued` : '';
+}
+
+function btLoadCsv(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result.replace(/^\uFEFF/, ''); // BOM-safe
+    const lines = text.split('\n');
+    if (!lines.length) return;
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const colIdx  = headers.findIndex(h => ['symbol','ticker','stock','ticker symbol','stock symbol'].includes(h));
+    const useIdx  = colIdx >= 0 ? colIdx : 0;
+    lines.slice(1).forEach(line => {
+      const cols = line.split(',');
+      const raw  = (cols[useIdx] || '').trim().toUpperCase().replace(/\.NS|\.BO/g, '');
+      if (raw && !_btTickers.includes(raw)) _btTickers.push(raw);
+    });
+    btRenderChips();
+    setBtStatus(`Loaded ${_btTickers.length} tickers from ${file.name}`);
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+async function btLoadFno() {
+  setBtStatus('Loading F&O ticker list...');
+  try {
+    const resp = await fetch('/api/ema9/tickers/list?source=fno');
+    const data = await resp.json();
+    (data.symbols || []).forEach(s => {
+      if (!_btTickers.includes(s)) _btTickers.push(s);
+    });
+    btRenderChips();
+    setBtStatus(`Loaded ${data.total} F&O tickers`);
+  } catch (err) {
+    setBtStatus('Failed to load ticker list: ' + err.message, 'danger');
+  }
+}
+
+function setBtStatus(msg, type = 'info') {
+  const el = document.getElementById('btStatusText');
+  el.textContent = msg;
+  el.className = 'font-mono text-xs ' + ({
+    info: 'text-slate-500', danger: 'text-danger', success: 'text-accent'
+  }[type] || 'text-slate-500');
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  BACKTEST — RUN
+// ═══════════════════════════════════════════════════════════
+
+async function runBacktest() {
+  if (!_btTickers.length) {
+    setBtStatus('Add at least one ticker first.', 'danger'); return;
+  }
+
+  const btn     = document.getElementById('btRunBtn');
+  const txt     = document.getElementById('btRunText');
+  const spinner = document.getElementById('btRunSpinner');
+
+  btn.disabled = true; txt.textContent = 'Running...'; spinner.classList.remove('hidden');
+  _fvYearlyCache = {};  // Clear FV cache for fresh run
+
+  const targetPct      = parseFloat(document.getElementById('btTargetPct').value)  || 3;
+  const maxHoldDays    = parseInt(document.getElementById('btMaxHold').value)       || 15;
+  const requireUptrend = document.getElementById('btRequireUptrend').checked;
+
+  setBtStatus(`Running backtest on ${_btTickers.length} tickers…`);
+
+  try {
+    const resp = await fetch('/api/ema9/backtest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tickers:         _btTickers,
+        target_pct:      targetPct,
+        max_hold_days:   maxHoldDays,
+        require_uptrend: requireUptrend,
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    _btResults = await resp.json();
+
+    // ── Step 2: Fetch year-wise Fair Value for every unique ticker with trades ──
+    const tradeTickers = [...new Set((_btResults.all_trades || []).map(t => t.ticker))];
+    if (tradeTickers.length) {
+      setBtStatus(`Fetching year-wise Fair Value for ${tradeTickers.length} ticker(s)…`);
+      // Fetch in parallel (up to 6 at a time to avoid hammering server)
+      const CHUNK = 6;
+      for (let i = 0; i < tradeTickers.length; i += CHUNK) {
+        await Promise.all(tradeTickers.slice(i, i + CHUNK).map(tk => _fetchYearlyFV(tk)));
+        if (i + CHUNK < tradeTickers.length) await new Promise(r => setTimeout(r, 400));
+      }
+      // Annotate each trade with year-matched FV from fair_value_router
+      for (const trade of _btResults.all_trades) {
+        const cache = _fvYearlyCache[trade.ticker];
+        const fvInfo = _getFVForTrade(trade.entry_date, cache);
+        trade._fv_yearly        = fvInfo.fair_value;
+        trade._fv_yearly_gap    = fvInfo.fv_gap_pct;
+        trade._fv_yearly_source = fvInfo.fv_source;
+        trade._fv_fy            = fvInfo.fy;
+        trade._entry_vs_fv_pct  = (fvInfo.fair_value && trade.entry_price)
+          ? parseFloat(((fvInfo.fair_value - trade.entry_price) / trade.entry_price * 100).toFixed(2))
+          : null;
+        trade._is_uv_at_entry   = (fvInfo.fair_value && trade.entry_price)
+          ? trade.entry_price < fvInfo.fair_value
+          : null;
+      }
+      // Also annotate skipped signals with year-matched FV
+      for (const skip of (_btResults.all_skipped || [])) {
+        const cache = _fvYearlyCache[skip.ticker];
+        const fvInfo = _getFVForTrade(skip.entry_date, cache);
+        skip._fv_yearly        = fvInfo.fair_value;
+        skip._fv_yearly_gap    = fvInfo.fv_gap_pct;
+        skip._fv_yearly_source = fvInfo.fv_source;
+        skip._fv_fy            = fvInfo.fy;
+        skip._entry_vs_fv_pct  = (fvInfo.fair_value && skip.entry_price)
+          ? parseFloat(((fvInfo.fair_value - skip.entry_price) / skip.entry_price * 100).toFixed(2))
+          : null;
+        skip._is_uv_at_entry   = (fvInfo.fair_value && skip.entry_price)
+          ? skip.entry_price < fvInfo.fair_value
+          : null;
+      }
+    }
+
+    renderBacktestResults(_btResults);
+    setBtStatus(
+      `Done — ${_btResults.aggregate.total_trades} trades across ${_btResults.aggregate.tickers_with_trades} tickers`,
+      'success'
+    );
+  } catch (err) {
+    setBtStatus('Error: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = false; txt.textContent = 'Run Backtest'; spinner.classList.add('hidden');
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  BACKTEST — RENDER RESULTS
+// ═══════════════════════════════════════════════════════════
+
+function renderBacktestResults(data) {
+  const agg = data.aggregate;
+
+  // ── Aggregate stats ──────────────────────────────────────
+  document.getElementById('btAggTrades').textContent      = agg.total_trades ?? '—';
+  document.getElementById('btAggWinRate').textContent     = agg.win_rate_pct    != null ? agg.win_rate_pct + '%'   : '—';
+  document.getElementById('btAggAvgWin').textContent      = agg.avg_win_pct     != null ? '+' + agg.avg_win_pct + '%' : '—';
+  document.getElementById('btAggAvgLoss').textContent     = agg.avg_loss_pct    != null ? agg.avg_loss_pct + '%'  : '—';
+  document.getElementById('btAggExpectancy').textContent  = agg.expectancy_pct  != null ? agg.expectancy_pct + '%': '—';
+  document.getElementById('btAggTickersWithTrades').textContent = agg.tickers_with_trades ?? '—';
+  document.getElementById('btAggWins').textContent        = agg.total_wins      ?? '—';
+  document.getElementById('btAggLosses').textContent      = agg.total_losses    ?? '—';
+  document.getElementById('btAggTimeouts').textContent    = agg.total_timeouts  ?? '—';
+  document.getElementById('btAggSection').classList.remove('hidden');
+
+  // ── Per-ticker table ─────────────────────────────────────
+  if (data.results && data.results.length) {
+    document.getElementById('btTickerResultCount').textContent = data.results.length + ' tickers';
+    renderBtTickerTable(data.results);
+    document.getElementById('btTickerSection').classList.remove('hidden');
+  }
+
+  // ── All trades log ───────────────────────────────────────
+  if (data.all_trades && data.all_trades.length) {
+    const skippedCount = (data.all_skipped || []).length;
+    document.getElementById('btTradeCount').textContent = data.all_trades.length + ' trades';
+    document.getElementById('btSkippedCountBadge').textContent = skippedCount ? `(+${skippedCount} skipped)` : '';
+    renderBtTradesTable(data.all_trades, data.all_skipped || []);
+    document.getElementById('btTradesSection').classList.remove('hidden');
+  }
+
+  // ── Failed tickers ───────────────────────────────────────
+  const allFailed = [...(data.failed || [])];
+  if (allFailed.length) {
+    document.getElementById('btFailedCount').textContent = allFailed.length;
+    document.getElementById('btFailedTags').innerHTML = allFailed.map(f =>
+      `<span class="font-mono text-xs px-2 py-1 rounded bg-card2 text-slate-500" title="${f.error || ''}">${f.ticker}</span>`
+    ).join('');
+    document.getElementById('btFailedSection').classList.remove('hidden');
+  }
+}
+
+function renderBtTickerTable(results) {
+  document.getElementById('btTickerTableBody').innerHTML = results.map(r => {
+    const s  = r.summary;
+    const wr = s.win_rate_pct;
+    const wrClass = wr >= 60 ? 'bt-win' : wr >= 40 ? 'text-warn' : 'bt-loss';
+    const tr = s.total_return_pct;
+    const trClass = tr >= 0 ? 'bt-win' : 'bt-loss';
+    const ex = s.expectancy_pct;
+    const exClass = ex >= 0 ? 'bt-win' : 'bt-loss';
+    return `<tr class="border-b border-border/20 hover:bg-card2/50 transition-colors">
+      <td class="px-4 py-3 font-ui font-700 text-white">${r.ticker}</td>
+      <td class="px-4 py-3 font-mono text-slate-300">${s.total_trades}</td>
+      <td class="px-4 py-3 font-mono font-600 ${wrClass}">${wr != null ? wr + '%' : '—'}</td>
+      <td class="px-4 py-3 font-mono bt-win">${s.avg_win_pct != null ? '+' + s.avg_win_pct + '%' : '—'}</td>
+      <td class="px-4 py-3 font-mono bt-loss">${s.avg_loss_pct != null ? s.avg_loss_pct + '%' : '—'}</td>
+      <td class="px-4 py-3 font-mono font-600 ${exClass}">${ex != null ? ex + '%' : '—'}</td>
+      <td class="px-4 py-3 font-mono font-600 ${trClass}">${tr != null ? (tr >= 0 ? '+' : '') + tr + '%' : '—'}</td>
+      <td class="px-4 py-3 font-mono text-xs">
+        <span class="bt-win">${s.wins}W</span> /
+        <span class="bt-loss">${s.losses}L</span> /
+        <span class="bt-timeout">${s.timeouts}T</span>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Trades-log sort helpers ─────────────────────────────────────────────
+// Maps sort key → comparator on merged trade objects
+const _TRADES_SORT_COMPARATORS = {
+  date_asc:     (a, b) => (a.entry_date || '') < (b.entry_date || '') ? -1 : (a.entry_date || '') > (b.entry_date || '') ? 1 : 0,
+  date_desc:    (a, b) => (a.entry_date || '') > (b.entry_date || '') ? -1 : (a.entry_date || '') < (b.entry_date || '') ? 1 : 0,
+  ticker_asc:   (a, b) => a.ticker.localeCompare(b.ticker),
+  ticker_desc:  (a, b) => b.ticker.localeCompare(a.ticker),
+  gain_desc:    (a, b) => (b.gain_pct ?? -999) - (a.gain_pct ?? -999),
+  gain_asc:     (a, b) => (a.gain_pct ?? 999)  - (b.gain_pct ?? 999),
+  days_asc:     (a, b) => (a.days_held ?? 0)   - (b.days_held ?? 0),
+  days_desc:    (a, b) => (b.days_held ?? 0)   - (a.days_held ?? 0),
+  entry_desc:   (a, b) => (b.entry_price ?? 0) - (a.entry_price ?? 0),
+  entry_asc:    (a, b) => (a.entry_price ?? 0) - (b.entry_price ?? 0),
+  fvgap_desc:   (a, b) => ((b._entry_vs_fv_pct ?? b.entry_vs_fv_pct) ?? -999) - ((a._entry_vs_fv_pct ?? a.entry_vs_fv_pct) ?? -999),
+  fvgap_asc:    (a, b) => ((a._entry_vs_fv_pct ?? a.entry_vs_fv_pct) ?? 999)  - ((b._entry_vs_fv_pct ?? b.entry_vs_fv_pct) ?? 999),
+  outcome_win:  (a, b) => {
+    const rank = o => o === 'WIN' ? 0 : o === 'TIMEOUT' ? 1 : 2;
+    return rank(a.outcome) - rank(b.outcome);
+  },
+  outcome_loss: (a, b) => {
+    const rank = o => o === 'LOSS' ? 0 : o === 'TIMEOUT' ? 1 : 2;
+    return rank(a.outcome) - rank(b.outcome);
+  },
+};
+
+// Column header sort icons: track which column is active
+const _TH_SORT_MAP = {
+  ticker_asc: 'tsh-ticker', ticker_desc: 'tsh-ticker',
+  date_asc:   'tsh-date',   date_desc:   'tsh-date',
+  entry_asc:  'tsh-entry',  entry_desc:  'tsh-entry',
+  fvgap_asc:  'tsh-fvgap',  fvgap_desc:  'tsh-fvgap',
+  days_asc:   'tsh-days',   days_desc:   'tsh-days',
+  gain_asc:   'tsh-gain',   gain_desc:   'tsh-gain',
+  outcome_win:'tsh-outcome', outcome_loss:'tsh-outcome',
+};
+
+// Called by th onclick — toggles between asc/desc for that column
+function btTradesSetSort(keyA, keyB) {
+  const newKey = (_btTradesSortKey === keyA) ? keyB : keyA;
+  document.getElementById('btTradesSortSelect').value = newKey;
+  _btTradesSortKey = newKey;
+  _btApplyTradesSort();
+}
+
+// Called by the dropdown onchange
+function btSortTradesTable() {
+  _btTradesSortKey = document.getElementById('btTradesSortSelect').value;
+  _btApplyTradesSort();
+}
+
+function _btApplyTradesSort() {
+  // Update header icon highlights
+  const ALL_TH_IDS = ['tsh-ticker','tsh-date','tsh-entry','tsh-fvgap','tsh-days','tsh-gain','tsh-outcome'];
+  ALL_TH_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = '⇅'; el.classList.remove('active'); }
+  });
+  const activeId = _TH_SORT_MAP[_btTradesSortKey];
+  if (activeId) {
+    const el = document.getElementById(activeId);
+    if (el) {
+      el.textContent = _btTradesSortKey.endsWith('_desc') ? '↓' : '↑';
+      el.classList.add('active');
+    }
+  }
+
+  // Re-render from cached raw data
+  _btRenderTradesFromRaw();
+}
+
+function _btRenderTradesFromRaw() {
+  const { trades, skipped } = _btAllTradesRaw;
+  const cmp = _TRADES_SORT_COMPARATORS[_btTradesSortKey] || _TRADES_SORT_COMPARATORS.date_asc;
+
+  // Merge, tag, sort
+  const merged = [
+    ...trades.map(t  => ({ ...t, was_skipped: false })),
+    ...(skipped || []).map(t => ({ ...t, was_skipped: true  })),
+  ].sort(cmp);
+
+  // Respect current skipped-visible toggle
+  const showSkipped = document.getElementById('btShowSkipped')?.checked ?? false;
+
+  document.getElementById('btTradesTableBody').innerHTML = merged.map(t => _buildTradeRow(t, showSkipped)).join('');
+}
+
+function renderBtTradesTable(trades, skippedTrades = []) {
+  // Cache raw data so re-sorts don't need the original arrays
+  _btAllTradesRaw = { trades, skipped: skippedTrades };
+
+  // Reset sort to default (date ascending) on fresh run
+  _btTradesSortKey = 'date_asc';
+  const sel = document.getElementById('btTradesSortSelect');
+  if (sel) sel.value = 'date_asc';
+
+  // Clear all column sort icons
+  ['tsh-ticker','tsh-date','tsh-entry','tsh-fvgap','tsh-days','tsh-gain','tsh-outcome'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = '⇅'; el.classList.remove('active'); }
+  });
+  // Activate default column icon
+  const defEl = document.getElementById('tsh-date');
+  if (defEl) { defEl.textContent = '↑'; defEl.classList.add('active'); }
+
+  _btRenderTradesFromRaw();
+}
+
+// Single-row builder extracted so both initial render and re-sort share it
+function _buildTradeRow(t, showSkipped) {
+    const isSkipped  = t.was_skipped;
+    const cls = isSkipped
+      ? 'trade-skipped skipped-row' + (showSkipped ? ' show' : '') + ' border-b border-border/20 hover:bg-card2/50 transition-colors'
+      : (t.outcome === 'WIN' ? 'trade-win' : t.outcome === 'TIMEOUT' ? 'trade-timeout' : 'trade-loss') +
+        ' border-b border-border/20 hover:bg-card2/50 transition-colors';
+    const gainClass  = (t.gain_pct ?? 0) >= 0 ? 'bt-win' : 'bt-loss';
+    const outClass   = t.outcome === 'WIN' ? 'bt-win' : t.outcome === 'TIMEOUT' ? 'bt-timeout' : 'bt-loss';
+
+    // Type badge
+    const typeBadge = isSkipped
+      ? `<span style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:.06em;
+          background:rgba(99,102,241,0.18);color:#818cf8;border:1px solid rgba(99,102,241,.4);
+          border-radius:4px;padding:1px 6px;white-space:nowrap;">SKIPPED</span>`
+      : `<span style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:.06em;
+          background:rgba(0,229,160,0.12);color:#00e5a0;border:1px solid rgba(0,229,160,.3);
+          border-radius:4px;padding:1px 6px;white-space:nowrap;">TRADED</span>`;
+
+    // ── Fair Value column ──────────────────────────────────────────────────
+    const fvYearly  = t._fv_yearly;
+    const fvCurrent = t.composite_fair_price;
+    const fvSource  = t._fv_yearly_source;
+    const fyYear    = t._fv_fy;
+
+    let fvCell;
+    if (fvYearly && fvYearly > 0) {
+      const isUV    = t._is_uv_at_entry;
+      const fvColor = isUV ? '#00e5a0' : '#ef4444';
+      const fvBg    = isUV ? 'rgba(0,229,160,0.08)' : 'rgba(239,68,68,0.08)';
+      const fvLabel = isUV ? '▲ UV' : '▼ OV';
+      const fyLabel  = fyYear ? `<span style="font-size:9px;opacity:0.55;margin-left:4px;">FY${fyYear}</span>` : '';
+      const srcBadge = fvSource
+        ? `<span style="font-size:8px;opacity:0.6;background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px;margin-left:3px;">${fvSource}</span>`
+        : '';
+      fvCell = `<span style="color:${fvColor};background:${fvBg};border:1px solid ${fvColor}33;
+        padding:2px 6px;border-radius:4px;font-size:10px;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;">
+        ₹${fmtNum(fvYearly)} <span style="font-size:9px;opacity:0.8;">${fvLabel}</span>${fyLabel}${srcBadge}
+      </span>`;
+    } else if (fvCurrent && fvCurrent > 0) {
+      const isUV    = t.is_undervalued;
+      const fvColor = isUV ? '#00e5a0' : '#ef4444';
+      const fvBg    = isUV ? 'rgba(0,229,160,0.08)' : 'rgba(239,68,68,0.08)';
+      const fvLabel = isUV ? '▲ UV' : '▼ OV';
+      fvCell = `<span style="color:${fvColor};background:${fvBg};border:1px solid ${fvColor}33;
+        padding:2px 6px;border-radius:4px;font-size:10px;white-space:nowrap;">
+        ₹${fmtNum(fvCurrent)} <span style="font-size:9px;opacity:0.8;">${fvLabel}</span>
+        <span style="font-size:8px;opacity:0.5;margin-left:3px;">curr</span>
+      </span>`;
+    } else {
+      fvCell = `<span style="color:#475569;font-size:10px;">—</span>`;
+    }
+
+    // ── FV Gap % column ────────────────────────────────────────────────────
+    const gap = (t._entry_vs_fv_pct !== undefined && t._entry_vs_fv_pct !== null)
+      ? t._entry_vs_fv_pct : t.entry_vs_fv_pct;
+    let fvGapCell;
+    if (gap !== null && gap !== undefined) {
+      const gapColor = gap >= 0 ? '#00e5a0' : '#ef4444';
+      const gapSign  = gap >= 0 ? '+' : '';
+      const tipText  = gap >= 0
+        ? `Entry ₹${fmtNum(t.entry_price)} was ${Math.abs(gap)}% below FY${fyYear || ''} Fair Value`
+        : `Entry ₹${fmtNum(t.entry_price)} was ${Math.abs(gap)}% above FY${fyYear || ''} Fair Value`;
+      fvGapCell = `<span title="${tipText}" style="color:${gapColor};font-size:11px;font-weight:600;cursor:help;">${gapSign}${gap}%</span>`;
+    } else {
+      fvGapCell = `<span style="color:#475569;font-size:10px;">—</span>`;
+    }
+
+    // ── Trend column ──────────────────────────────────────────────
+    const trend = t.trend_regime || '—';
+    const trendMap = {
+      'UPTREND':   { color: '#00e5a0', bg: 'rgba(0,229,160,0.1)',   icon: '↑' },
+      'DOWNTREND': { color: '#ef4444', bg: 'rgba(239,68,68,0.1)',   icon: '↓' },
+      'SIDEWAYS':  { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  icon: '→' },
+    };
+    const tm = trendMap[trend] || { color: '#475569', bg: 'transparent', icon: '—' };
+    const trendCell = trend !== '—'
+      ? `<span style="color:${tm.color};background:${tm.bg};border:1px solid ${tm.color}33;
+          padding:2px 7px;border-radius:12px;font-size:10px;white-space:nowrap;font-weight:600;">
+          ${tm.icon} ${trend}</span>`
+      : `<span style="color:#475569;font-size:10px;">—</span>`;
+
+    // ── Outcome cell ──────────────────────────────────────────────
+    let outcomeCell;
+    if (isSkipped) {
+      const skipOutClass = t.outcome === 'WIN' ? 'bt-win' : t.outcome === 'TIMEOUT' ? 'bt-timeout' : 'bt-loss';
+      outcomeCell = `<span class="${skipOutClass}" style="font-size:10px;opacity:0.85;">${t.outcome}</span>
+        <span style="font-size:9px;color:#6366f1;margin-left:4px;">(would-be)</span>
+        <span style="font-weight:400;opacity:0.5;margin-left:3px;font-size:9px;">${t.days_held}d</span>`;
+    } else {
+      outcomeCell = `<span class="${outClass}">${t.outcome}</span> <span style="font-weight:400;opacity:0.65;margin-left:3px;">${t.days_held}d</span>`;
+    }
+
+    return `<tr class="${cls}">
+      <td class="px-4 py-2.5 font-ui font-700 text-white text-sm">${t.ticker}</td>
+      <td class="px-4 py-2.5">${typeBadge}</td>
+      <td class="px-4 py-2.5 font-mono text-xs text-slate-300">${t.entry_date}</td>
+      <td class="px-4 py-2.5 font-mono text-xs text-slate-300">₹${fmtNum(t.entry_price)}</td>
+      <td class="px-4 py-2.5 font-mono text-xs">${fvCell}</td>
+      <td class="px-4 py-2.5 font-mono text-xs">${fvGapCell}</td>
+      <td class="px-4 py-2.5 font-mono text-xs">${trendCell}</td>
+      <td class="px-4 py-2.5 font-mono text-xs text-accent">₹${fmtNum(t.target_price)}</td>
+      <td class="px-4 py-2.5 font-mono text-xs text-slate-400">${t.exit_date || '—'}</td>
+      <td class="px-4 py-2.5 font-mono text-xs text-slate-300">${t.exit_price ? '₹' + fmtNum(t.exit_price) : '—'}</td>
+      <td class="px-4 py-2.5 font-mono text-xs text-slate-400">${t.days_held}d</td>
+      <td class="px-4 py-2.5 font-mono text-xs font-600 ${gainClass}">${(t.gain_pct >= 0 ? '+' : '') + t.gain_pct}%</td>
+      <td class="px-4 py-2.5 font-mono text-xs font-600">${outcomeCell}</td>
+    </tr>`;
+}
+
+function btToggleTrades() {
+  const c  = document.getElementById('btTradesContent');
+  const ch = document.getElementById('btTradesChevron');
+  c.classList.toggle('hidden');
+  ch.style.transform = c.classList.contains('hidden') ? '' : 'rotate(180deg)';
+}
+
+function btToggleSkippedRows() {
+  _btRenderTradesFromRaw();
+}
+
+function btSortTickerTable() {
+  if (!_btResults) return;
+  const key = document.getElementById('btSortSelect').value;
+  const sorted = [..._btResults.results].sort((a, b) => {
+    const map = {
+      win_rate:     r => -(r.summary.win_rate_pct    || 0),
+      total_return: r => -(r.summary.total_return_pct || 0),
+      trades:       r => -(r.summary.total_trades     || 0),
+      expectancy:   r => -(r.summary.expectancy_pct   || 0),
+    };
+    return (map[key](a) || 0) - (map[key](b) || 0);
+  });
+  renderBtTickerTable(sorted);
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  CHARTINK LIVE FEED — Persistent Signal Store
+//  • Signals accumulate in localStorage across page reloads
+//  • Each scan MERGES new signals (ticker → latest data + metadata)
+//  • Old signals persist until user clicks "Clear"
+//  • "NEW" badge on signals from the latest scan batch
+//  • Stats reflect total accumulated store, not just last scan
+// ═══════════════════════════════════════════════════════════
+
+const CHARTINK_POLL_MS    = 5 * 60 * 1000;
+const CHARTINK_STORE_KEY  = 'chartink_signal_store_v1';
+const CHARTINK_META_KEY   = 'chartink_meta_v1';
+const NEW_BADGE_TTL_MS    = 10 * 60 * 1000; // show "NEW" badge for 10 min after scan
+
+let _chartinkPollStarted    = false;
+let _chartinkPollTimer      = null;
+let _chartinkCountdownTimer = null;
+let _chartinkNextScanAt     = null;
+
+// ── Persistent store helpers ──────────────────────────────────────────
+// Store shape: { [ticker]: { ...signalData, _foundAt: isoString, _scanAt: isoString, _isPrime: bool } }
+
+function _ckLoadStore() {
+  try { return JSON.parse(localStorage.getItem(CHARTINK_STORE_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function _ckSaveStore(store) {
+  try { localStorage.setItem(CHARTINK_STORE_KEY, JSON.stringify(store)); }
+  catch (e) { console.warn('[CK] localStorage save failed:', e); }
+}
+
+function _ckLoadMeta() {
+  try { return JSON.parse(localStorage.getItem(CHARTINK_META_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function _ckSaveMeta(meta) {
+  try { localStorage.setItem(CHARTINK_META_KEY, JSON.stringify(meta)); }
+  catch (e) { console.warn('[CK] localStorage meta save failed:', e); }
+}
+
+// ── Merge new scan results into persistent store ──────────────────────
+function _ckMergeResults(data) {
+  const store    = _ckLoadStore();
+  const meta     = _ckLoadMeta();
+  const scanAt   = data.last_run_at || new Date().toISOString();
+  const nowIso   = new Date().toISOString();
+  const result   = data.result;
+
+  // Track which tickers came in this scan (for NEW badge)
+  const thisScantickers = new Set();
+
+  if (result) {
+    const primes = result.prime_targets || [];
+    const others = result.other_signals || [];
+
+    primes.forEach(sig => {
+      const t = sig.ticker;
+      thisScantickers.add(t);
+      const isNew = !store[t]; // brand-new ticker never seen before
+      store[t] = {
+        ...sig,
+        _isPrime:  true,
+        _scanAt:   scanAt,
+        _foundAt:  isNew ? nowIso : (store[t]?._foundAt || nowIso),
+        _isNew:    true,  // mark all from this scan batch as "new"
+      };
+      storeSignal(sig);
+    });
+
+    others.forEach(sig => {
+      const t = sig.ticker;
+      thisScantickers.add(t);
+      const isNew = !store[t];
+      store[t] = {
+        ...sig,
+        _isPrime:  false,
+        _scanAt:   scanAt,
+        _foundAt:  isNew ? nowIso : (store[t]?._foundAt || nowIso),
+        _isNew:    true,
+      };
+      storeSignal(sig);
+    });
+  }
+
+  // Clear _isNew on tickers NOT in this scan (they're old)
+  Object.keys(store).forEach(t => {
+    if (!thisScantickers.has(t)) {
+      store[t]._isNew = false;
+    }
+  });
+
+  _ckSaveStore(store);
+  _ckSaveMeta({
+    last_run_at:     scanAt,
+    symbols_pulled:  data.symbols_pulled || [],
+    total_scans:     (meta.total_scans || 0) + 1,
+    last_scan_new:   thisScantickers.size,
+    last_scan_total_store: Object.keys(store).length,
+    last_scan_at_epoch: Date.now(),
+  });
+
+  return store;
+}
+
+// ── Module-level store row builder (used by both _ckRenderStore and sortChartinkTable) ──
+function _buildCkStoreRow(s, isPrime, meta) {
+  if (!meta) meta = _ckLoadMeta();
+  const nowMs      = Date.now();
+  const lastScanMs = meta.last_scan_at_epoch || 0;
+  const isRecent   = (nowMs - lastScanMs) < NEW_BADGE_TTL_MS;
+  const newBadge = (s._isNew && isRecent)
+    ? `<span style="display:inline-block;margin-left:4px;font-size:9px;font-weight:700;
+            letter-spacing:.05em;background:rgba(16,185,129,.18);color:#10b981;
+            border:1px solid rgba(16,185,129,.35);border-radius:4px;
+            padding:1px 5px;vertical-align:middle;line-height:1.5;">NEW</span>`
+    : '';
+  const scanTime = s._scanAt ? `<div style="font-size:9px;color:#475569;margin-top:1px;">${_fmtRelTime(s._scanAt)}</div>` : '';
+  const rowHtml = buildRow(s, isPrime);
+  // Insert NEW badge + scan time after ticker text in first <td>
+  return rowHtml.replace(
+    /(<td[^>]*>)(<span[^>]*font-mono[^>]*>[^<]*<\/span>)/,
+    `$1$2${newBadge}${scanTime}`
+  );
+}
+
+// ── Rendering from the accumulated store ─────────────────────────────
+function _ckRenderStore() {
+  const store = _ckLoadStore();
+  const meta  = _ckLoadMeta();
+  const allEntries = Object.values(store);
+
+  const nowMs     = Date.now();
+  const lastScanMs = meta.last_scan_at_epoch || 0;
+  const isRecent   = (nowMs - lastScanMs) < NEW_BADGE_TTL_MS;
+
+  const primes = allEntries.filter(s => s._isPrime);
+  const others = allEntries.filter(s => !s._isPrime);
+
+  // Sort: new first, then by candles_ago asc
+  const sortFn = (a, b) => {
+    if (a._isNew && !b._isNew) return -1;
+    if (!a._isNew && b._isNew) return  1;
+    return (a.candles_ago || 999) - (b.candles_ago || 999);
+  };
+  primes.sort(sortFn);
+  others.sort(sortFn);
+
+  const emptySection = document.getElementById('chartinkEmptySection');
+
+  // Update header meta
+  document.getElementById('chartinkLastRun').textContent = meta.last_run_at || 'never';
+  const symPulled = meta.symbols_pulled || [];
+  document.getElementById('chartinkSymbolCount').textContent = symPulled.length;
+  document.getElementById('chartinkSymbolList').textContent  = symPulled.length ? `(${symPulled.join(', ')})` : '';
+
+  // Update store count badge
+  const totalStored = allEntries.length;
+  const storeCountEl = document.getElementById('chartinkStoredCount');
+  if (storeCountEl) storeCountEl.textContent = `${totalStored} stored`;
+
+  if (!totalStored) {
+    document.getElementById('chartinkSummarySection').classList.add('hidden');
+    document.getElementById('chartinkPrimeSection').classList.add('hidden');
+    document.getElementById('chartinkOtherSection').classList.add('hidden');
+    document.getElementById('chartinkFailedSection').classList.add('hidden');
+    emptySection.classList.remove('hidden');
+    return;
+  }
+  emptySection.classList.add('hidden');
+
+  // Stats reflect accumulated store
+  document.getElementById('chartinkSummarySection').classList.remove('hidden');
+  document.getElementById('chartinkStatTotal').textContent    = totalStored;
+  document.getElementById('chartinkStatPrime').textContent    = primes.length;
+  document.getElementById('chartinkStatOther').textContent    = others.length;
+  // Filtered/failed stats come from last scan (we don't accumulate those)
+  document.getElementById('chartinkStatFiltered').textContent = meta.last_scan_filtered || 0;
+  document.getElementById('chartinkStatFailed').textContent   = meta.last_scan_failed   || 0;
+
+  // Build rows with NEW badge for this scan's batch — uses module-level _buildCkStoreRow
+
+  if (primes.length) {
+    document.getElementById('chartinkPrimeSection').classList.remove('hidden');
+    document.getElementById('chartinkPrimeCount').textContent = primes.length;
+    const primeSortKey = document.getElementById('chartinkPrimeSortSelect')?.value || 'gap_desc';
+    const sortedPrimes = primeSortKey === 'gap_desc' || primeSortKey === 'gap_asc' || primeSortKey === 'price_desc' || primeSortKey === 'price_asc'
+      ? _sortSignalArray(primes, primeSortKey)
+      : primes; // for candles sorts, the default sortFn already sorted above
+    document.getElementById('chartinkPrimeTableBody').innerHTML = sortedPrimes.map(s => _buildCkStoreRow(s, true, meta)).join('');
+  } else {
+    document.getElementById('chartinkPrimeSection').classList.add('hidden');
+  }
+
+  if (others.length) {
+    document.getElementById('chartinkOtherSection').classList.remove('hidden');
+    document.getElementById('chartinkOtherCount').textContent = others.length;
+    const otherSortKey = document.getElementById('chartinkOtherSortSelect')?.value || 'candles_asc';
+    const sortedOthers = otherSortKey === 'gap_desc' || otherSortKey === 'gap_asc' || otherSortKey === 'price_desc' || otherSortKey === 'price_asc'
+      ? _sortSignalArray(others, otherSortKey)
+      : others;
+    document.getElementById('chartinkOtherTableBody').innerHTML = sortedOthers.map(s => _buildCkStoreRow(s, false, meta)).join('');
+  } else {
+    document.getElementById('chartinkOtherSection').classList.add('hidden');
+  }
+
+  // Failed / filtered from last scan only
+  const filtered = meta.last_scan_filtered_list || [];
+  const failed   = meta.last_scan_failed_list   || [];
+  if (filtered.length || failed.length) {
+    document.getElementById('chartinkFailedSection').classList.remove('hidden');
+    document.getElementById('chartinkFailedCount').textContent = filtered.length + failed.length;
+    if (filtered.length) {
+      document.getElementById('chartinkFilteredByTrend').classList.remove('hidden');
+      document.getElementById('chartinkFilteredTags').innerHTML = filtered.map(f =>
+        `<span class="font-mono text-xs px-2 py-1 rounded bg-card2 text-slate-400">${f.ticker} <span class="text-slate-600">${f.trend_regime}</span></span>`
+      ).join('');
+    }
+    if (failed.length) {
+      document.getElementById('chartinkFailedList').classList.remove('hidden');
+      document.getElementById('chartinkFailedTags').innerHTML = failed.map(f =>
+        `<span class="font-mono text-xs px-2 py-1 rounded bg-card2 text-slate-500" title="${f.error || ''}">${f.ticker}</span>`
+      ).join('');
+    }
+  } else {
+    document.getElementById('chartinkFailedSection').classList.add('hidden');
+  }
+}
+
+function _fmtRelTime(isoStr) {
+  if (!isoStr) return '';
+  try {
+    const diffMs  = Date.now() - new Date(isoStr).getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1)  return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24)   return `${diffH}h ago`;
+    return `${Math.floor(diffH/24)}d ago`;
+  } catch { return ''; }
+}
+
+// ── Polling machinery ─────────────────────────────────────────────────
+function startChartinkPolling() {
+  _chartinkPollStarted = true;
+
+  // Immediately render whatever is already in the store (instant page load)
+  _ckRenderStore();
+
+  // Then fetch fresh data from backend
+  fetchChartinkResults();
+  _resetChartinkCountdown();
+
+  if (_chartinkPollTimer) clearInterval(_chartinkPollTimer);
+  _chartinkPollTimer = setInterval(() => {
+    fetchChartinkResults();
+    _resetChartinkCountdown();
+  }, CHARTINK_POLL_MS);
+
+  if (_chartinkCountdownTimer) clearInterval(_chartinkCountdownTimer);
+  _chartinkCountdownTimer = setInterval(_tickChartinkCountdown, 1000);
+}
+
+function _resetChartinkCountdown() {
+  _chartinkNextScanAt = Date.now() + CHARTINK_POLL_MS;
+  _tickChartinkCountdown();
+}
+
+function _tickChartinkCountdown() {
+  const el = document.getElementById('chartinkNextScan');
+  if (!el || !_chartinkNextScanAt) return;
+  const remainingMs = Math.max(0, _chartinkNextScanAt - Date.now());
+  const totalSec    = Math.ceil(remainingMs / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  el.textContent = `${m}:${String(s).padStart(2, '0')}`;
+}
+
+async function fetchChartinkResults() {
+  try {
+    const resp = await fetch('/api/chartink-screener/results');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    _ckIngestAndRender(data);
+  } catch (err) {
+    setChartinkStatus('Error loading feed: ' + err.message, 'danger');
+    // Still render the store even if backend fetch failed
+    _ckRenderStore();
+  }
+}
+
+function _ckIngestAndRender(data) {
+  // Save filtered/failed lists into meta for rendering
+  const meta   = _ckLoadMeta();
+  const result = data.result;
+  meta.last_scan_filtered      = (result?.filtered_by_trend || []).length;
+  meta.last_scan_failed        = (result?.failed || []).length;
+  meta.last_scan_filtered_list = result?.filtered_by_trend || [];
+  meta.last_scan_failed_list   = result?.failed || [];
+  _ckSaveMeta(meta);
+
+  _ckMergeResults(data);
+  _ckRenderStore();
+  setChartinkStatus(`Feed updated • ${Object.keys(_ckLoadStore()).length} signals stored`, 'success');
+}
+
+async function runChartinkScanNow() {
+  const btn     = document.getElementById('chartinkScanNowBtn');
+  const txt     = document.getElementById('chartinkScanNowText');
+  const spinner = document.getElementById('chartinkScanNowSpinner');
+
+  btn.disabled = true; txt.textContent = 'Scanning...'; spinner.classList.remove('hidden');
+  setChartinkStatus('Pulling from Chartink & running screener...');
+
+  try {
+    const resp = await fetch('/api/chartink-screener/scan-now', { method: 'POST' });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    _ckIngestAndRender(data);
+    _resetChartinkCountdown();
+  } catch (err) {
+    setChartinkStatus('Error: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = false; txt.textContent = 'Scan Now'; spinner.classList.add('hidden');
+  }
+}
+
+async function clearChartinkResults() {
+  if (!confirm('Clear ALL stored signals and history? This cannot be undone.')) return;
+  try {
+    await fetch('/api/chartink-screener/clear', { method: 'DELETE' });
+    localStorage.removeItem(CHARTINK_STORE_KEY);
+    localStorage.removeItem(CHARTINK_META_KEY);
+    _ckRenderStore();
+    setChartinkStatus('All signals cleared', 'success');
+  } catch (err) {
+    setChartinkStatus('Error clearing: ' + err.message, 'danger');
+  }
+}
+
+function setChartinkStatus(msg, type = 'info') {
+  const el = document.getElementById('chartinkStatusText');
+  el.textContent = msg;
+  el.className = 'font-mono text-xs ' + ({ info: 'text-slate-500', danger: 'text-danger', success: 'text-accent' }[type] || 'text-slate-500');
+}
+
+// Legacy shim — renderChartinkResults was called from old code paths; redirect to new system
+function renderChartinkResults(data) { _ckIngestAndRender(data); }
+
+function toggleChartinkFailed() {
+  const c  = document.getElementById('chartinkFailedContent');
+  const ch = document.getElementById('chartinkFailedChevron');
+  c.classList.toggle('hidden');
+  ch.style.transform = c.classList.contains('hidden') ? '' : 'rotate(180deg)';
+}
+
+// Chartink auto-poll starts on page load. Placed at end of script after
+// all state (_allSignals etc.) is declared. The immediate _ckRenderStore()
+// inside startChartinkPolling() ensures the user sees stored signals
+// instantly — no waiting for the first backend fetch.
+startChartinkPolling();
+
+</script>
+</body>
+</html>

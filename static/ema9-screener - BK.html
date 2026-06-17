@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>9 EMA Momentum Screener</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        ui:   ['"Exo 2"', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+      },
+      colors: {
+        base:   '#030912',
+        card:   '#0a1628',
+        card2:  '#0f1d32',
+        border: '#1a2d4a',
+        accent: '#00e5a0',
+        accent2:'#00b8d4',
+        warn:   '#f59e0b',
+        danger: '#ef4444',
+      }
+    }
+  }
+}
+</script>
+
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Exo 2', sans-serif;
+    background: #030912;
+    color: #e2e8f0;
+    min-height: 100vh;
+  }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+  .upload-zone {
+    border: 2px dashed #1a2d4a;
+    background: linear-gradient(135deg, rgba(0,229,160,0.03), rgba(0,184,212,0.03));
+    transition: all 0.3s ease;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: #00e5a0;
+    background: linear-gradient(135deg, rgba(0,229,160,0.08), rgba(0,184,212,0.08));
+    box-shadow: 0 0 30px rgba(0,229,160,0.1);
+  }
+
+  .glow-target {
+    color: #00e5a0;
+    text-shadow: 0 0 8px rgba(0,229,160,0.5), 0 0 20px rgba(0,229,160,0.2);
+  }
+
+  @keyframes pulse-warn {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+  }
+  .pulse-warn { animation: pulse-warn 1.5s ease-in-out infinite; }
+
+  .signal-row {
+    transition: background 0.15s ease;
+    cursor: pointer;
+  }
+  .signal-row:hover {
+    background: rgba(0,229,160,0.06) !important;
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #0a1628; }
+  ::-webkit-scrollbar-thumb { background: #1a2d4a; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #2a4d6a; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid rgba(0,229,160,0.2);
+    border-top-color: #00e5a0;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: inline-block;
+  }
+  .spinner-sm {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(0,229,160,0.2);
+    border-top-color: #00e5a0;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  .modal-backdrop {
+    background: rgba(3,9,18,0.85);
+    backdrop-filter: blur(8px);
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(26,45,74,0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(26,45,74,0.12) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .badge-fresh {
+    background: rgba(0,229,160,0.15);
+    color: #00e5a0;
+    border: 1px solid rgba(0,229,160,0.3);
+  }
+  .badge-nearing {
+    background: rgba(245,158,11,0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245,158,11,0.3);
+  }
+  .badge-nodata {
+    background: rgba(100,116,139,0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(100,116,139,0.3);
+  }
+  .badge-nosignal {
+    background: rgba(100,116,139,0.15);
+    color: #64748b;
+    border: 1px solid rgba(100,116,139,0.3);
+  }
+  .badge-uptrend {
+    background: rgba(0,229,160,0.1);
+    color: #00e5a0;
+  }
+  .badge-sideways {
+    background: rgba(245,158,11,0.1);
+    color: #f59e0b;
+  }
+  .badge-downtrend {
+    background: rgba(239,68,68,0.1);
+    color: #ef4444;
+  }
+  .badge-prime {
+    background: rgba(0,229,160,0.2);
+    color: #00e5a0;
+    border: 1px solid rgba(0,229,160,0.4);
+  }
+  .badge-technical {
+    background: rgba(245,158,11,0.2);
+    color: #f59e0b;
+    border: 1px solid rgba(245,158,11,0.4);
+  }
+  .badge-fv-missing {
+    background: rgba(100,116,139,0.1);
+    color: #64748b;
+    border: 1px solid rgba(100,116,139,0.2);
+  }
+
+  .glass-card {
+    background: linear-gradient(135deg, rgba(10,22,40,0.9), rgba(15,29,50,0.8));
+    border: 1px solid rgba(26,45,74,0.6);
+    backdrop-filter: blur(10px);
+  }
+
+  .autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    max-height: 200px;
+    overflow-y: auto;
+    background: #0f1d32;
+    border: 1px solid #1a2d4a;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .autocomplete-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.1s;
+  }
+  .autocomplete-item:hover, .autocomplete-item.active {
+    background: rgba(0,229,160,0.1);
+  }
+  .autocomplete-item .sym { color: #e2e8f0; font-family: 'JetBrains Mono', monospace; }
+  .autocomplete-item .nam { color: #64748b; font-size: 11px; margin-left: 8px; }
+
+  .scan-card {
+    border-left: 3px solid;
+    transition: all 0.3s ease;
+  }
+  .scan-card.prime  { border-left-color: #00e5a0; }
+  .scan-card.tech   { border-left-color: #f59e0b; }
+  .scan-card.nodata { border-left-color: #64748b; }
+
+  /* FV fetch button in table */
+  .fv-fetch-btn {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(0,184,212,0.1);
+    color: #00b8d4;
+    border: 1px solid rgba(0,184,212,0.3);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .fv-fetch-btn:hover {
+    background: rgba(0,184,212,0.2);
+    border-color: rgba(0,184,212,0.5);
+  }
+  .fv-fetch-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Tooltip */
+  .fv-error-tip {
+    position: relative;
+    cursor: help;
+    border-bottom: 1px dotted #64748b;
+  }
+  .fv-error-tip:hover::after {
+    content: attr(data-error);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1a2d4a;
+    color: #94a3b8;
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    z-index: 50;
+    pointer-events: none;
+  }
+</style>
+</head>
+
+<body class="grid-bg">
+
+<header class="border-b border-border/50 py-4 px-6">
+  <div class="max-w-7xl mx-auto flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-accent to-accent2 flex items-center justify-center">
+        <svg class="w-5 h-5 text-base" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 7h4l3 9 4-12 3 9h4"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="font-ui text-xl font-800 tracking-tight text-white">9 EMA Momentum Screener</h1>
+        <p class="font-ui text-xs text-slate-500 tracking-wide">Breakout + Confirmation + 3% Target</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-4 text-xs font-mono text-slate-500">
+      <span id="clock"></span>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+
+  <!-- ═══════════════ QUICK SCAN ═══════════════ -->
+  <section class="glass-card rounded-2xl p-6">
+    <div class="flex items-center gap-2 mb-4">
+      <svg class="w-5 h-5 text-accent2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+      </svg>
+      <h2 class="font-ui text-lg font-700 text-white">Quick Scan</h2>
+      <span class="text-xs font-mono text-slate-500 ml-2">Single ticker analysis</span>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <div class="relative flex-1 max-w-md">
+        <input type="text" id="tickerInput"
+          placeholder="Enter ticker (e.g. RELIANCE, TCS, INFY)"
+          autocomplete="off"
+          class="w-full px-4 py-2.5 rounded-lg bg-card2 border border-border/50
+                 font-mono text-sm text-white placeholder-slate-600
+                 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20
+                 transition-all duration-200">
+        <div id="autocompleteDropdown" class="autocomplete-list hidden"></div>
+      </div>
+      <button id="quickScanBtn"
+        class="px-5 py-2.5 rounded-lg font-ui font-600 text-sm
+               bg-gradient-to-r from-accent2 to-accent text-base
+               hover:shadow-lg hover:shadow-accent2/20 transition-all duration-200
+               flex items-center gap-2 whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+        </svg>
+        <span id="quickScanText">Scan</span>
+        <span id="quickScanSpinner" class="spinner-sm hidden"></span>
+      </button>
+    </div>
+
+    <div id="quickScanResult" class="hidden mt-5"></div>
+  </section>
+
+  <!-- ═══════════════ CSV UPLOAD ═══════════════ -->
+  <section class="glass-card rounded-2xl p-6">
+    <div class="flex items-center gap-2 mb-4">
+      <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+      </svg>
+      <h2 class="font-ui text-lg font-700 text-white">Upload CSV</h2>
+      <span class="text-xs font-mono text-slate-500 ml-2">Third-party screener exports supported</span>
+    </div>
+
+    <div id="dropZone" class="upload-zone rounded-xl p-8 text-center">
+      <input type="file" id="fileInput" accept=".csv" class="hidden">
+      <div class="space-y-3">
+        <div class="mx-auto w-16 h-16 rounded-full bg-card2 flex items-center justify-center">
+          <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+          </svg>
+        </div>
+        <p class="font-ui text-sm text-slate-400">
+          Drag & drop your CSV here, or <button onclick="document.getElementById('fileInput').click()" class="text-accent hover:underline">browse files</button>
+        </p>
+        <p class="font-mono text-xs text-slate-600">Auto-detects Symbol / Ticker / Stock column &bull; BOM-safe parsing</p>
+      </div>
+    </div>
+
+    <div id="fileInfo" class="hidden mt-4 flex items-center justify-between bg-card2 rounded-lg px-4 py-3">
+      <div class="flex items-center gap-3">
+        <svg class="w-4 h-4 text-accent" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+        </svg>
+        <span id="fileName" class="font-mono text-sm text-slate-300"></span>
+        <span id="fileTickerCount" class="font-mono text-xs text-slate-500"></span>
+      </div>
+      <button id="clearFile" class="text-xs text-slate-500 hover:text-danger transition-colors">Clear</button>
+    </div>
+
+    <div class="mt-4 flex items-center gap-4">
+      <button id="screenBtn" disabled
+        class="px-6 py-2.5 rounded-lg font-ui font-600 text-sm
+               bg-gradient-to-r from-accent to-accent2 text-base
+               disabled:opacity-30 disabled:cursor-not-allowed
+               hover:shadow-lg hover:shadow-accent/20 transition-all duration-200
+               flex items-center gap-2">
+        <span id="screenBtnText">Process & Screen</span>
+        <span id="screenBtnSpinner" class="spinner hidden"></span>
+      </button>
+      <span id="csvStatusText" class="font-mono text-xs text-slate-500"></span>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SUMMARY STATS ═══════════════ -->
+  <section id="summarySection" class="hidden">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <div class="glass-card rounded-xl p-4 text-center">
+        <p class="font-mono text-2xl font-700 text-white" id="statTotal">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Total Signals</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center border-accent/20">
+        <p class="font-mono text-2xl font-700 text-accent" id="statPrime">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Prime Targets</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center border-warn/20">
+        <p class="font-mono text-2xl font-700 text-warn" id="statOther">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Technical Only</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center">
+        <p class="font-mono text-2xl font-700 text-slate-400" id="statFiltered">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Trend Filtered</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center">
+        <p class="font-mono text-2xl font-700 text-danger" id="statFailed">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">Failed</p>
+      </div>
+      <div class="glass-card rounded-xl p-4 text-center">
+        <p class="font-mono text-2xl font-700 text-slate-500" id="statFvMissing">0</p>
+        <p class="font-ui text-xs text-slate-500 mt-1">FV Missing</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ TABLE A: PRIME TARGETS ═══════════════ -->
+  <section id="primeSection" class="hidden">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3">
+        <span class="text-lg">🎯</span>
+        <h2 class="font-ui text-lg font-700 text-accent">PRIME TARGETS: UNDERVALUED + UPTREND</h2>
+        <span id="primeCount" class="font-mono text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full">0</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs font-ui font-600 text-slate-500 uppercase tracking-wider border-b border-border/30">
+              <th class="px-4 py-3">Ticker</th>
+              <th class="px-4 py-3">Price</th>
+              <th class="px-4 py-3">3% Target</th>
+              <th class="px-4 py-3">EMA 9</th>
+              <th class="px-4 py-3">SMA 50</th>
+              <th class="px-4 py-3">Fair Value</th>
+              <th class="px-4 py-3">Gap to FV</th>
+              <th class="px-4 py-3">BO Date</th>
+              <th class="px-4 py-3">CF Date</th>
+              <th class="px-4 py-3">Ago</th>
+              <th class="px-4 py-3">Trend</th>
+              <th class="px-4 py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody id="primeTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ TABLE B: OTHER SIGNALS ═══════════════ -->
+  <section id="otherSection" class="hidden">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3">
+        <span class="text-lg">⚖️</span>
+        <h2 class="font-ui text-lg font-700 text-warn">TECHNICAL BREAKOUTS (OVERVALUED)</h2>
+        <span id="otherCount" class="font-mono text-xs bg-warn/10 text-warn px-2 py-0.5 rounded-full">0</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs font-ui font-600 text-slate-500 uppercase tracking-wider border-b border-border/30">
+              <th class="px-4 py-3">Ticker</th>
+              <th class="px-4 py-3">Price</th>
+              <th class="px-4 py-3">3% Target</th>
+              <th class="px-4 py-3">EMA 9</th>
+              <th class="px-4 py-3">SMA 50</th>
+              <th class="px-4 py-3">Fair Value</th>
+              <th class="px-4 py-3">Gap to FV</th>
+              <th class="px-4 py-3">BO Date</th>
+              <th class="px-4 py-3">CF Date</th>
+              <th class="px-4 py-3">Ago</th>
+              <th class="px-4 py-3">Trend</th>
+              <th class="px-4 py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody id="otherTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ FAILED / FILTERED ═══════════════ -->
+  <section id="failedSection" class="hidden">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3 cursor-pointer" onclick="toggleFailed()">
+        <span class="text-lg">⚠️</span>
+        <h2 class="font-ui text-lg font-700 text-slate-400">Filtered & Failed Tickers</h2>
+        <span id="failedCount" class="font-mono text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">0</span>
+        <svg id="failedChevron" class="w-4 h-4 text-slate-500 ml-auto transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </div>
+      <div id="failedContent" class="hidden px-6 py-4">
+        <div id="filteredByTrend" class="mb-4 hidden">
+          <h3 class="font-ui text-xs font-600 text-slate-500 uppercase mb-2">Trend Filtered (Close &le; 50 SMA)</h3>
+          <div id="filteredTags" class="flex flex-wrap gap-2"></div>
+        </div>
+        <div id="failedList" class="hidden">
+          <h3 class="font-ui text-xs font-600 text-slate-500 uppercase mb-2">Failed / No Data</h3>
+          <div id="failedTags" class="flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ═══════════════ CHART MODAL ═══════════════ -->
+<div id="chartModal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
+  <div class="glass-card rounded-2xl w-full max-w-5xl max-h-[90vh] mx-4 overflow-hidden flex flex-col">
+    <div class="px-6 py-4 border-b border-border/50 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span id="chartTicker" class="font-ui text-xl font-800 text-white"></span>
+        <span id="chartPrice" class="font-mono text-sm text-accent"></span>
+        <span id="chartTrend" class="font-mono text-xs px-2 py-0.5 rounded-full"></span>
+        <span id="chartSignalType" class="font-mono text-xs px-2 py-0.5 rounded-full"></span>
+      </div>
+      <button onclick="closeChart()" class="w-8 h-8 rounded-lg bg-card2 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="flex-1 overflow-auto p-4">
+      <div id="plotlyChart" style="width:100%;height:500px;"></div>
+    </div>
+    <div class="px-6 py-3 border-t border-border/50 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-mono text-slate-400">
+      <span>BO: <span id="chartBO" class="text-accent"></span></span>
+      <span>CF: <span id="chartCF" class="text-accent2"></span></span>
+      <span>Target 3%: <span id="chartTarget" class="glow-target"></span></span>
+      <span>FV: <span id="chartFV" class="text-slate-300"></span></span>
+      <span>EMA9: <span id="chartEMA9" class="text-accent2"></span></span>
+      <span>SMA50: <span id="chartSMA50" class="text-warn"></span></span>
+    </div>
+  </div>
+</div>
+
+<script>
+
+// ─── Clock ─────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleDateString('en-IN', { weekday:'short', day:'2-digit', month:'short' }) +
+    ' ' + now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+}
+updateClock();
+setInterval(updateClock, 30000);
+
+// ─── State ─────────────────────────────────────────────────
+let selectedFile = null;
+let lastResults  = null;
+let acTimeout    = null;
+let acIndex      = -1;
+
+// ─── Global signal store for row click → chart ─────────────
+let _allSignals = {};
+
+function storeSignal(sig) {
+  _allSignals[sig.ticker] = sig;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  QUICK SCAN
+// ═══════════════════════════════════════════════════════════
+
+const tickerInput  = document.getElementById('tickerInput');
+const quickScanBtn = document.getElementById('quickScanBtn');
+
+tickerInput.addEventListener('keydown', e => {
+  const dropdown = document.getElementById('autocompleteDropdown');
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (!dropdown.classList.contains('hidden') && acIndex >= 0) {
+      const items = dropdown.querySelectorAll('.autocomplete-item');
+      if (items[acIndex]) {
+        tickerInput.value = items[acIndex].dataset.symbol;
+        dropdown.classList.add('hidden');
+      }
+    }
+    runQuickScan();
+  } else if (e.key === 'ArrowDown') { e.preventDefault(); navigateAC(1); }
+  else if (e.key === 'ArrowUp')   { e.preventDefault(); navigateAC(-1); }
+  else if (e.key === 'Escape')    { dropdown.classList.add('hidden'); }
+});
+
+tickerInput.addEventListener('input', () => {
+  clearTimeout(acTimeout);
+  const q = tickerInput.value.trim();
+  if (q.length < 1) { document.getElementById('autocompleteDropdown').classList.add('hidden'); return; }
+  acTimeout = setTimeout(() => fetchAutocomplete(q), 200);
+});
+
+tickerInput.addEventListener('blur', () => {
+  setTimeout(() => document.getElementById('autocompleteDropdown').classList.add('hidden'), 200);
+});
+
+async function fetchAutocomplete(q) {
+  try {
+    const resp = await fetch(`/api/ema9/tickers?q=${encodeURIComponent(q)}`);
+    const data = await resp.json();
+    renderAutocomplete(data.tickers || []);
+  } catch { document.getElementById('autocompleteDropdown').classList.add('hidden'); }
+}
+
+function renderAutocomplete(tickers) {
+  const dropdown = document.getElementById('autocompleteDropdown');
+  acIndex = -1;
+  if (!tickers.length) { dropdown.classList.add('hidden'); return; }
+  dropdown.innerHTML = tickers.map((t, i) =>
+    `<div class="autocomplete-item" data-symbol="${t.symbol}" data-index="${i}"
+          onmousedown="selectAC('${t.symbol}')">
+      <span class="sym">${t.symbol}</span><span class="nam">${t.name || ''}</span>
+    </div>`
+  ).join('');
+  dropdown.classList.remove('hidden');
+}
+
+function selectAC(symbol) {
+  tickerInput.value = symbol;
+  document.getElementById('autocompleteDropdown').classList.add('hidden');
+  runQuickScan();
+}
+
+function navigateAC(dir) {
+  const dropdown = document.getElementById('autocompleteDropdown');
+  const items = dropdown.querySelectorAll('.autocomplete-item');
+  if (!items.length) return;
+  acIndex = Math.max(0, Math.min(items.length - 1, acIndex + dir));
+  items.forEach((el, i) => el.classList.toggle('active', i === acIndex));
+}
+
+quickScanBtn.addEventListener('click', runQuickScan);
+
+async function runQuickScan() {
+  const ticker = tickerInput.value.trim().toUpperCase();
+  if (!ticker) return;
+
+  const btn     = quickScanBtn;
+  const txt     = document.getElementById('quickScanText');
+  const spinner = document.getElementById('quickScanSpinner');
+
+  btn.disabled = true; txt.textContent = 'Scanning...'; spinner.classList.remove('hidden');
+
+  try {
+    const resp = await fetch(`/api/ema9/quick-scan/${encodeURIComponent(ticker)}`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    storeSignal(data);
+    renderQuickScanResult(data);
+  } catch (err) {
+    document.getElementById('quickScanResult').innerHTML = `
+      <div class="scan-card nodata bg-card2 rounded-xl p-5">
+        <div class="flex items-center gap-3">
+          <svg class="w-5 h-5 text-danger" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd"/></svg>
+          <span class="font-ui text-sm text-danger">Error: ${err.message}</span>
+        </div>
+      </div>`;
+    document.getElementById('quickScanResult').classList.remove('hidden');
+  } finally {
+    btn.disabled = false; txt.textContent = 'Scan'; spinner.classList.add('hidden');
+  }
+}
+
+function renderQuickScanResult(s) {
+  const container = document.getElementById('quickScanResult');
+  container.classList.remove('hidden');
+
+  if (s.status === 'NO_DATA') {
+    container.innerHTML = `
+      <div class="scan-card nodata bg-card2 rounded-xl p-5">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="font-ui text-lg font-700 text-slate-400">${s.ticker}</span>
+          <span class="badge-nodata font-mono text-xs px-2 py-0.5 rounded-full">NO DATA</span>
+        </div>
+        <p class="font-mono text-xs text-slate-500">${s.error || 'Insufficient price history'}</p>
+      </div>`;
+    return;
+  }
+
+  if (s.status === 'NO_SIGNAL') {
+    const trendRegime = s.trend_regime || '—';
+    container.innerHTML = `
+      <div class="scan-card nodata bg-card2 rounded-xl p-5">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="font-ui text-lg font-700 text-slate-300">${s.ticker}</span>
+          <span class="font-mono text-sm text-slate-400">₹${fmtNum(s.current_price)}</span>
+          <span class="font-mono text-xs px-2 py-0.5 rounded-full ${getTrendBadgeClass(trendRegime)}">${trendRegime}</span>
+          <span class="badge-nosignal font-mono text-xs px-2 py-0.5 rounded-full">NO 9EMA SIGNAL</span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+          <div><span class="text-slate-500">EMA 9</span><br><span class="text-slate-300">₹${fmtNum(s.ema9_value)}</span></div>
+          <div><span class="text-slate-500">SMA 50</span><br><span class="text-slate-300">₹${fmtNum(s.sma50_value)}</span></div>
+          <div><span class="text-slate-500">Above 50 SMA</span><br><span class="${s.above_sma50 ? 'text-accent' : 'text-danger'}">${s.above_sma50 ? 'Yes' : 'No'}</span></div>
+          <div><span class="text-slate-500">3% Target</span><br><span class="text-slate-400">₹${fmtNum(s.target_3pct)}</span></div>
+        </div>
+        ${buildFVSection(s)}
+      </div>`;
+    return;
+  }
+
+  // SIGNAL
+  const isPrime   = s.signal_type === 'PRIME';
+  const cardClass = isPrime ? 'prime' : 'tech';
+  const typeLabel = isPrime ? 'PRIME TARGET' : 'TECHNICAL ONLY';
+  const typeBadge = isPrime ? 'badge-prime' : 'badge-technical';
+  const trendRegime = s.trend_regime || '—';
+  const nearing    = s.target_nearing;
+
+  container.innerHTML = `
+    <div class="scan-card ${cardClass} bg-card2 rounded-xl p-5">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="font-ui text-lg font-700 text-white">${s.ticker}</span>
+        <span class="font-mono text-sm text-accent">₹${fmtNum(s.current_price)}</span>
+        <span class="font-mono text-xs px-2 py-0.5 rounded-full ${getTrendBadgeClass(trendRegime)}">${trendRegime}</span>
+        <span class="font-mono text-xs px-2 py-0.5 rounded-full ${typeBadge}">${typeLabel}</span>
+        ${nearing ? '<span class="badge-nearing font-mono text-xs px-2 py-0.5 rounded-full pulse-warn">TARGET NEARING</span>' : ''}
+        <button onclick='openChart(${JSON.stringify(s).replace(/'/g, "&#39;")})'
+          class="ml-auto px-3 py-1 rounded-md bg-card border border-border/50 text-xs font-ui text-slate-400 hover:text-accent hover:border-accent/30 transition-all">
+          View Chart
+        </button>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono">
+        <div class="bg-card rounded-lg p-3">
+          <span class="text-slate-500 block mb-1">3% Target</span>
+          <span class="glow-target text-base font-700">₹${fmtNum(s.target_3pct)}</span>
+        </div>
+        <div class="bg-card rounded-lg p-3">
+          <span class="text-slate-500 block mb-1">Breakout</span>
+          <span class="text-accent">${s.breakout_date}</span>
+          <span class="text-slate-500 ml-1">@ ₹${fmtNum(s.breakout_close)}</span>
+        </div>
+        <div class="bg-card rounded-lg p-3">
+          <span class="text-slate-500 block mb-1">Confirmation</span>
+          <span class="text-accent2">${s.confirm_date}</span>
+          <span class="text-slate-500 ml-1">@ ₹${fmtNum(s.confirm_close)}</span>
+        </div>
+        <div class="bg-card rounded-lg p-3">
+          <span class="text-slate-500 block mb-1">Candles Ago</span>
+          <span class="text-white text-base font-700">${s.candles_ago}</span>
+        </div>
+      </div>
+      <div class="mt-3 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs font-mono">
+        <div><span class="text-slate-500">EMA 9</span><br><span class="text-accent2">₹${fmtNum(s.ema9_value)}</span></div>
+        <div><span class="text-slate-500">SMA 50</span><br><span class="text-warn">₹${fmtNum(s.sma50_value)}</span></div>
+        <div><span class="text-slate-500">EMA Dist</span><br><span class="text-slate-300">${s.ema9_dist_pct}%</span></div>
+        <div><span class="text-slate-500">Fair Value</span><br><span class="text-slate-300">${s.composite_fair_price ? '₹' + fmtNum(s.composite_fair_price) : 'N/A'}</span></div>
+        <div><span class="text-slate-500">Gap to FV</span><br><span class="${(s.gap_to_fair_pct||0)>=0 ? 'text-accent' : 'text-danger'}">${s.gap_to_fair_pct != null ? (s.gap_to_fair_pct >= 0 ? '+' : '') + s.gap_to_fair_pct.toFixed(1) + '%' : '—'}</span></div>
+      </div>
+      ${buildFVSection(s)}
+    </div>`;
+}
+
+
+// ─── FV Section Builder (reused in quick scan results) ─────
+function buildFVSection(s) {
+  const hasFV = s.composite_fair_price != null;
+  const fvError = s.fv_error || null;
+
+  if (hasFV) return '';  // FV is fine, no section needed
+
+  let errorHint = '';
+  if (fvError) {
+    // Make error more readable
+    if (fvError.includes('SMA_ERROR'))       errorHint = 'Screener.in returned an error for this stock';
+    else if (fvError.includes('NO_COMPOSITE')) errorHint = 'Valuation models could not compute a composite price';
+    else if (fvError.includes('RETRY_EXHAUSTED')) errorHint = 'FV fetch failed after multiple retries';
+    else if (fvError.includes('NOT_AVAILABLE'))   errorHint = 'FV engine unavailable';
+    else errorHint = fvError.substring(0, 80);
+  }
+
+  return `
+    <div class="mt-3 pt-3 border-t border-border/30">
+      <div class="flex items-center gap-3">
+        <span class="badge-fv-missing font-mono text-xs px-2 py-0.5 rounded-full">FV UNAVAILABLE</span>
+        ${errorHint ? `<span class="font-mono text-xs text-slate-600 fv-error-tip" data-error="${errorHint}">${errorHint.substring(0, 50)}${errorHint.length > 50 ? '...' : ''}</span>` : ''}
+        <button onclick="fetchFVForTicker('${s.ticker}', this)" class="fv-fetch-btn font-mono">
+          Fetch FV
+        </button>
+      </div>
+    </div>`;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  ON-DEMAND FV FETCH
+// ═══════════════════════════════════════════════════════════
+
+async function fetchFVForTicker(ticker, btnEl) {
+  if (!ticker) return;
+  const origText = btnEl.textContent;
+  btnEl.disabled = true;
+  btnEl.innerHTML = '<span class="spinner-sm"></span>';
+
+  try {
+    const resp = await fetch(`/api/ema9/fair-value/${encodeURIComponent(ticker)}`);
+    const data = await resp.json();
+
+    if (data.status === 'OK' && data.composite_fair_price) {
+      // Update the stored signal
+      if (_allSignals[ticker]) {
+        _allSignals[ticker].composite_fair_price = data.composite_fair_price;
+        _allSignals[ticker].composite_gain_pct   = data.composite_gain_pct;
+        _allSignals[ticker].fair_gap_pct         = data.fair_gap_pct;
+        _allSignals[ticker].valuation_bucket     = data.valuation_bucket;
+        _allSignals[ticker].fv_model_count       = data.fv_model_count;
+        _allSignals[ticker].gap_to_fair_pct      = data.gap_to_fair_pct;
+        _allSignals[ticker].fv_error             = null;
+      }
+
+      // Update all table cells with this ticker
+      updateFVInTables(ticker, data);
+
+      // Update quick scan result if visible
+      const qsResult = document.getElementById('quickScanResult');
+      if (!qsResult.classList.contains('hidden') && _allSignals[ticker]) {
+        renderQuickScanResult(_allSignals[ticker]);
+      }
+
+      btnEl.textContent = 'Done ✓';
+      btnEl.style.color = '#00e5a0';
+      btnEl.style.borderColor = 'rgba(0,229,160,0.3)';
+      setTimeout(() => { btnEl.textContent = 'Fetch FV'; btnEl.style.color = ''; btnEl.style.borderColor = ''; }, 2000);
+    } else {
+      const errMsg = data.fv_error || 'Unknown error';
+      btnEl.textContent = 'Failed';
+      btnEl.style.color = '#ef4444';
+      btnEl.title = errMsg;
+      setTimeout(() => { btnEl.textContent = 'Retry'; btnEl.style.color = ''; btnEl.disabled = false; }, 2000);
+    }
+  } catch (err) {
+    btnEl.textContent = 'Error';
+    btnEl.style.color = '#ef4444';
+    setTimeout(() => { btnEl.textContent = 'Fetch FV'; btnEl.style.color = ''; btnEl.disabled = false; }, 2000);
+  }
+}
+
+
+function updateFVInTables(ticker, fvData) {
+  // Find all FV cells for this ticker and update them
+  document.querySelectorAll(`tr[data-ticker="${ticker}"]`).forEach(row => {
+    const fvCell     = row.querySelector('.fv-cell');
+    const gapCell    = row.querySelector('.fv-gap-cell');
+    const fetchCell  = row.querySelector('.fv-fetch-cell');
+
+    if (fvCell) {
+      fvCell.innerHTML = `<span class="font-mono text-slate-300">₹${fmtNum(fvData.composite_fair_price)}</span>`;
+    }
+    if (gapCell) {
+      const gap = fvData.gap_to_fair_pct;
+      gapCell.innerHTML = gap != null
+        ? `<span class="font-mono ${gap >= 0 ? 'text-accent' : 'text-danger'}">${(gap >= 0 ? '+' : '') + gap.toFixed(1)}%</span>`
+        : '—';
+    }
+    if (fetchCell) {
+      fetchCell.innerHTML = '<span class="font-mono text-xs text-accent">✓</span>';
+    }
+  });
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  CSV UPLOAD
+// ═══════════════════════════════════════════════════════════
+
+const dropZone  = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+
+function handleFile(file) {
+  if (!file.name.toLowerCase().endsWith('.csv')) { setCsvStatus('Only .csv files accepted', 'danger'); return; }
+  selectedFile = file;
+  document.getElementById('fileInfo').classList.remove('hidden');
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileTickerCount').textContent = '';
+  document.getElementById('screenBtn').disabled = false;
+  setCsvStatus('Ready to screen');
+}
+
+document.getElementById('clearFile').addEventListener('click', () => {
+  selectedFile = null; fileInput.value = '';
+  document.getElementById('fileInfo').classList.add('hidden');
+  document.getElementById('screenBtn').disabled = true;
+  setCsvStatus('');
+});
+
+document.getElementById('screenBtn').addEventListener('click', runCsvScreen);
+
+async function runCsvScreen() {
+  if (!selectedFile) return;
+  const btn     = document.getElementById('screenBtn');
+  const txt     = document.getElementById('screenBtnText');
+  const spinner = document.getElementById('screenBtnSpinner');
+
+  btn.disabled = true; txt.textContent = 'Processing...'; spinner.classList.remove('hidden');
+  setCsvStatus('Uploading CSV & running screener...');
+
+  try {
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    const resp = await fetch('/api/ema9/upload-csv', { method: 'POST', body: formData });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    lastResults = data;
+    renderResults(data);
+    setCsvStatus(`Done — ${data.count} signals found`, 'success');
+  } catch (err) {
+    setCsvStatus('Error: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = false; txt.textContent = 'Process & Screen'; spinner.classList.add('hidden');
+  }
+}
+
+function setCsvStatus(msg, type='info') {
+  const el = document.getElementById('csvStatusText');
+  el.textContent = msg;
+  el.className = 'font-mono text-xs ' + ({ info:'text-slate-500', danger:'text-danger', success:'text-accent' }[type] || 'text-slate-500');
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER BATCH RESULTS
+// ═══════════════════════════════════════════════════════════
+
+function renderResults(data) {
+  document.getElementById('summarySection').classList.remove('hidden');
+  document.getElementById('statTotal').textContent     = data.count || 0;
+  document.getElementById('statPrime').textContent     = data.prime_count || 0;
+  document.getElementById('statOther').textContent     = data.other_count || 0;
+  document.getElementById('statFiltered').textContent  = (data.filtered_by_trend || []).length;
+  document.getElementById('statFailed').textContent    = (data.failed || []).length;
+  document.getElementById('statFvMissing').textContent = (data.fv_failures || []).length;
+
+  if (data.csv_info) {
+    document.getElementById('fileTickerCount').textContent =
+      `${data.csv_info.parsed_tickers} tickers from "${data.csv_info.found_column}"`;
+  }
+
+  // Store all signals for chart access
+  const primes = data.prime_targets || [];
+  const others = data.other_signals || [];
+  [...primes, ...others].forEach(storeSignal);
+
+  // Prime table
+  if (primes.length) {
+    document.getElementById('primeSection').classList.remove('hidden');
+    document.getElementById('primeCount').textContent = primes.length;
+    document.getElementById('primeTableBody').innerHTML = primes.map(s => buildRow(s, true)).join('');
+  } else {
+    document.getElementById('primeSection').classList.add('hidden');
+  }
+
+  // Other table
+  if (others.length) {
+    document.getElementById('otherSection').classList.remove('hidden');
+    document.getElementById('otherCount').textContent = others.length;
+    document.getElementById('otherTableBody').innerHTML = others.map(s => buildRow(s, false)).join('');
+  } else {
+    document.getElementById('otherSection').classList.add('hidden');
+  }
+
+  // Failed / filtered
+  const filtered = data.filtered_by_trend || [];
+  const failed   = data.failed || [];
+  if (filtered.length || failed.length) {
+    document.getElementById('failedSection').classList.remove('hidden');
+    document.getElementById('failedCount').textContent = filtered.length + failed.length;
+    if (filtered.length) {
+      document.getElementById('filteredByTrend').classList.remove('hidden');
+      document.getElementById('filteredTags').innerHTML = filtered.map(f =>
+        `<span class="font-mono text-xs px-2 py-1 rounded bg-card2 text-slate-400">${f.ticker} <span class="text-slate-600">${f.trend_regime}</span></span>`
+      ).join('');
+    }
+    if (failed.length) {
+      document.getElementById('failedList').classList.remove('hidden');
+      document.getElementById('failedTags').innerHTML = failed.map(f =>
+        `<span class="font-mono text-xs px-2 py-1 rounded bg-card2 text-slate-500" title="${f.error || ''}">${f.ticker}</span>`
+      ).join('');
+    }
+  } else {
+    document.getElementById('failedSection').classList.add('hidden');
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  TABLE ROW BUILDER
+// ═══════════════════════════════════════════════════════════
+
+function buildRow(s, isPrime) {
+  const hasFV   = s.composite_fair_price != null;
+  const fvError = s.fv_error || null;
+
+  // FV cell content
+  let fvCellHTML;
+  if (hasFV) {
+    fvCellHTML = `<span class="font-mono text-slate-300">₹${fmtNum(s.composite_fair_price)}</span>`;
+  } else {
+    const errShort = fvError ? fvError.substring(0, 40) : 'N/A';
+    fvCellHTML = `<span class="fv-error-tip font-mono text-slate-600" data-error="${fvError || 'Unknown'}">—</span>`;
+  }
+
+  // Gap cell
+  const gapFv      = s.gap_to_fair_pct;
+  const gapFvStr   = gapFv != null ? (gapFv >= 0 ? '+' : '') + gapFv.toFixed(1) + '%' : '—';
+  const gapFvClass = gapFv != null ? (gapFv >= 0 ? 'text-accent' : 'text-danger') : 'text-slate-600';
+
+  // FV fetch button
+  let fvFetchHTML;
+  if (hasFV) {
+    fvFetchHTML = '';
+  } else {
+    fvFetchHTML = `<button onclick="event.stopPropagation(); fetchFVForTicker('${s.ticker}', this)" class="fv-fetch-btn">FV</button>`;
+  }
+
+  const trendRegime = s.trend_regime || '—';
+  const trendClass  = getTrendBadgeClass(trendRegime);
+  const nearing     = s.target_nearing;
+  const statusBadge = nearing
+    ? '<span class="badge-nearing font-mono text-xs px-2 py-0.5 rounded-full pulse-warn">NEARING</span>'
+    : '<span class="badge-fresh font-mono text-xs px-2 py-0.5 rounded-full">FRESH</span>';
+  const targetClass = isPrime ? 'glow-target font-mono font-600' : 'font-mono text-slate-300';
+
+  return `
+    <tr class="signal-row border-b border-border/20" data-ticker="${s.ticker}" onclick='openChartForTicker("${s.ticker}")'>
+      <td class="px-4 py-3 font-ui font-700 text-white">${s.ticker}</td>
+      <td class="px-4 py-3 font-mono text-slate-300">₹${fmtNum(s.current_price)}</td>
+      <td class="px-4 py-3 ${targetClass}">₹${fmtNum(s.target_3pct)}</td>
+      <td class="px-4 py-3 font-mono text-accent2">₹${fmtNum(s.ema9_value)}</td>
+      <td class="px-4 py-3 font-mono text-warn">₹${fmtNum(s.sma50_value)}</td>
+      <td class="px-4 py-3 fv-cell">${fvCellHTML} ${fvFetchHTML}</td>
+      <td class="px-4 py-3 fv-gap-cell font-mono ${gapFvClass}">${gapFvStr}</td>
+      <td class="px-4 py-3 font-mono text-slate-500 text-xs">${s.breakout_date || '—'}</td>
+      <td class="px-4 py-3 font-mono text-slate-500 text-xs">${s.confirm_date || '—'}</td>
+      <td class="px-4 py-3 font-mono text-slate-400">${s.candles_ago}</td>
+      <td class="px-4 py-3"><span class="font-mono text-xs px-2 py-0.5 rounded ${trendClass}">${trendRegime}</span></td>
+      <td class="px-4 py-3">${statusBadge}</td>
+    </tr>`;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════
+
+function fmtNum(v) {
+  if (v == null) return '—';
+  return Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function getTrendBadgeClass(regime) {
+  return { 'UPTREND':'badge-uptrend', 'SIDEWAYS':'badge-sideways', 'DOWNTREND':'badge-downtrend' }[regime] || '';
+}
+
+function toggleFailed() {
+  const c  = document.getElementById('failedContent');
+  const ch = document.getElementById('failedChevron');
+  c.classList.toggle('hidden');
+  ch.style.transform = c.classList.contains('hidden') ? '' : 'rotate(180deg)';
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  CHART MODAL
+// ═══════════════════════════════════════════════════════════
+
+function openChartForTicker(ticker) {
+  const sig = _allSignals[ticker];
+  if (sig) openChart(sig);
+}
+
+function openChart(signal) {
+  const modal = document.getElementById('chartModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  document.getElementById('chartTicker').textContent = signal.ticker;
+  document.getElementById('chartPrice').textContent  = '₹' + fmtNum(signal.current_price);
+
+  const trendRegime = signal.trend_regime || '—';
+  const trendEl = document.getElementById('chartTrend');
+  trendEl.textContent = trendRegime;
+  trendEl.className = 'font-mono text-xs px-2 py-0.5 rounded-full ' + getTrendBadgeClass(trendRegime);
+
+  const sigType = signal.signal_type || '';
+  const sigEl = document.getElementById('chartSignalType');
+  if (sigType === 'PRIME') {
+    sigEl.textContent = 'PRIME'; sigEl.className = 'font-mono text-xs px-2 py-0.5 rounded-full badge-prime';
+  } else if (sigType === 'TECHNICAL_ONLY') {
+    sigEl.textContent = 'TECHNICAL'; sigEl.className = 'font-mono text-xs px-2 py-0.5 rounded-full badge-technical';
+  } else {
+    sigEl.textContent = ''; sigEl.className = 'hidden';
+  }
+
+  document.getElementById('chartBO').textContent     = signal.breakout_date + ' @ ₹' + fmtNum(signal.breakout_close);
+  document.getElementById('chartCF').textContent     = signal.confirm_date + ' @ ₹' + fmtNum(signal.confirm_close);
+  document.getElementById('chartTarget').textContent = '₹' + fmtNum(signal.target_3pct);
+  document.getElementById('chartFV').textContent     = signal.composite_fair_price ? '₹' + fmtNum(signal.composite_fair_price) : 'N/A';
+  document.getElementById('chartEMA9').textContent   = '₹' + fmtNum(signal.ema9_value);
+  document.getElementById('chartSMA50').textContent  = '₹' + fmtNum(signal.sma50_value);
+
+  const candles = signal.candles || [];
+  if (!candles.length) return;
+
+  const dates  = candles.map(c => c.date);
+  const opens  = candles.map(c => c.open);
+  const highs  = candles.map(c => c.high);
+  const lows   = candles.map(c => c.low);
+  const closes = candles.map(c => c.close);
+  const ema9   = candles.map(c => c.ema9);
+  const sma50  = candles.map(c => c.sma50);
+
+  const boIdx = candles.findIndex(c => c.is_breakout);
+  const cfIdx = candles.findIndex(c => c.is_confirm);
+
+  const traces = [
+    { type: 'candlestick', x: dates, open: opens, high: highs, low: lows, close: closes,
+      name: 'OHLC', increasing: { line: { color: '#00e5a0' } }, decreasing: { line: { color: '#ef4444' } } },
+    { type: 'scatter', mode: 'lines', x: dates, y: ema9, name: '9 EMA', line: { color: '#00b8d4', width: 1.5 } },
+    { type: 'scatter', mode: 'lines', x: dates, y: sma50, name: '50 SMA', line: { color: '#f59e0b', width: 1.5, dash: 'dot' } },
+  ];
+
+  if (boIdx >= 0) {
+    traces.push({ type: 'scatter', mode: 'markers+text', x: [dates[boIdx]], y: [lows[boIdx] * 0.995],
+      text: ['BO'], textposition: 'bottom center', textfont: { color: '#00e5a0', size: 11, family: 'JetBrains Mono' },
+      marker: { color: '#00e5a0', size: 12, symbol: 'triangle-up' }, name: 'Breakout' });
+  }
+  if (cfIdx >= 0) {
+    traces.push({ type: 'scatter', mode: 'markers+text', x: [dates[cfIdx]], y: [lows[cfIdx] * 0.995],
+      text: ['CF'], textposition: 'bottom center', textfont: { color: '#00b8d4', size: 11, family: 'JetBrains Mono' },
+      marker: { color: '#00b8d4', size: 12, symbol: 'diamond' }, name: 'Confirmation' });
+  }
+  if (signal.target_3pct) {
+    traces.push({ type: 'scatter', mode: 'lines', x: [dates[0], dates[dates.length-1]], y: [signal.target_3pct, signal.target_3pct],
+      name: '3% Target', line: { color: '#00e5a0', width: 1, dash: 'dashdot' } });
+  }
+  if (signal.composite_fair_price) {
+    traces.push({ type: 'scatter', mode: 'lines', x: [dates[0], dates[dates.length-1]], y: [signal.composite_fair_price, signal.composite_fair_price],
+      name: 'Fair Value', line: { color: '#a78bfa', width: 1, dash: 'longdash' } });
+  }
+
+  Plotly.newPlot('plotlyChart', traces, {
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: '#0a1628',
+    font: { family: 'Exo 2', color: '#94a3b8', size: 11 },
+    margin: { l: 60, r: 20, t: 30, b: 40 },
+    xaxis: { type: 'date', gridcolor: '#1a2d4a', linecolor: '#1a2d4a', tickfont: { family: 'JetBrains Mono', size: 10 } },
+    yaxis: { gridcolor: '#1a2d4a', linecolor: '#1a2d4a', tickfont: { family: 'JetBrains Mono', size: 10 }, title: { text: '₹', font: { size: 11 } } },
+    legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.12, font: { size: 10 }, bgcolor: 'rgba(0,0,0,0)' },
+    showlegend: true, dragmode: 'zoom',
+  }, { responsive: true, displayModeBar: true, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
+}
+
+function closeChart() {
+  document.getElementById('chartModal').classList.add('hidden');
+  document.getElementById('chartModal').classList.remove('flex');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChart(); });
+document.getElementById('chartModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeChart(); });
+
+</script>
+</body>
+</html>

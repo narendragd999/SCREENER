@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>SMA Value Screener</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root{
+  --bg0:#030912;--bg1:#070f1c;--bg2:#0c1929;--bg3:#101f30;--bg4:#162840;
+  --border:#1a3150;--border-hi:#1e4a72;
+  --teal:#00d4b1;--teal-dim:#007a68;--teal-glow:rgba(0,212,177,.15);
+  --amber:#ff7b29;--amber-glow:rgba(255,123,41,.15);
+  --blue:#3d9bff;--blue-glow:rgba(61,155,255,.15);
+  --red:#ff3b5c;--red-glow:rgba(255,59,92,.15);
+  --green:#00d97e;--green-glow:rgba(0,217,126,.12);
+  --purple:#9b59b6;
+  --text0:#e8edf5;--text1:#9ab2cc;--text2:#4d6b8a;--text3:#2a4060;
+  --font-ui:'Exo 2',sans-serif;--font-mono:'JetBrains Mono',monospace;
+  --r:8px;--r-sm:5px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:var(--font-ui);background:var(--bg0);color:var(--text0);overflow-x:hidden}
+body{
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%,rgba(0,100,200,.08) 0%,transparent 70%),
+    repeating-linear-gradient(0deg,transparent,transparent 39px,var(--border) 39px,var(--border) 40px),
+    repeating-linear-gradient(90deg,transparent,transparent 39px,var(--border) 39px,var(--border) 40px);
+  background-size:100% 100%,40px 40px,40px 40px;background-attachment:fixed;
+}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg1)}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+
+header{
+  display:flex;align-items:center;gap:0;height:54px;min-height:54px;padding:0 20px;
+  background:linear-gradient(180deg,rgba(0,20,40,.95) 0%,rgba(7,15,28,.97) 100%);
+  border-bottom:1px solid var(--border-hi);position:sticky;top:0;z-index:100;backdrop-filter:blur(10px);
+}
+.logo-wrap{display:flex;align-items:center;gap:10px;margin-right:24px}
+.logo-icon{
+  width:32px;height:32px;background:linear-gradient(135deg,var(--purple) 0%,var(--blue) 100%);
+  border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:800;color:#fff;font-family:var(--font-mono);
+  box-shadow:0 0 20px rgba(155,89,182,.4);
+}
+.logo-title{font-size:15px;font-weight:700;letter-spacing:.04em;color:var(--text0)}
+.logo-sub{font-size:10px;letter-spacing:.1em;color:var(--text2);margin-top:2px;font-family:var(--font-mono);text-transform:uppercase}
+.back-link{
+  display:inline-flex;align-items:center;gap:6px;color:var(--text2);text-decoration:none;
+  font-size:12px;font-weight:600;padding:5px 12px;border-radius:var(--r-sm);
+  border:1px solid var(--border);transition:all .15s;margin-left:auto;
+}
+.back-link:hover{color:var(--teal);border-color:var(--teal-dim);background:var(--teal-glow)}
+.header-clock{
+  font-family:var(--font-mono);font-size:13px;color:var(--teal);
+  padding:0 14px;border-left:1px solid var(--border);height:54px;
+  display:flex;align-items:center;margin-left:16px;
+}
+
+/* ── TICKER AUTOCOMPLETE ── */
+.ticker-field { position:relative; }
+.ticker-box {
+  min-height:42px; padding:5px 8px;
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:var(--r-sm); cursor:text;
+  display:flex; flex-wrap:wrap; gap:5px; align-items:center;
+  transition:border-color .15s, box-shadow .15s;
+}
+.ticker-box:focus-within {
+  border-color:var(--teal-dim); box-shadow:0 0 0 2px var(--teal-glow);
+}
+.ticker-chip {
+  display:inline-flex; align-items:center; gap:5px;
+  background:var(--teal-glow); border:1px solid var(--teal-dim);
+  color:var(--teal); border-radius:4px;
+  font-family:var(--font-mono); font-size:11px; font-weight:600;
+  padding:2px 8px; white-space:nowrap;
+}
+.ticker-chip-remove {
+  cursor:pointer; color:var(--teal-dim); font-size:13px; line-height:1;
+  transition:color .1s;
+}
+.ticker-chip-remove:hover { color:var(--red); }
+.ticker-search {
+  background:transparent; border:none; outline:none;
+  color:var(--text0); font-family:var(--font-mono); font-size:12px;
+  min-width:100px; flex:1; padding:2px 4px;
+}
+.ticker-search::placeholder { color:var(--text3); }
+.ticker-dropdown {
+  display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:500;
+  background:var(--bg2); border:1px solid var(--border-hi);
+  border-radius:var(--r-sm); max-height:260px; overflow-y:auto;
+  box-shadow:0 8px 32px rgba(0,0,0,.6);
+}
+.ticker-dropdown.open { display:block; }
+.ticker-option {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 12px; cursor:pointer; transition:background .1s;
+  border-bottom:1px solid var(--border);
+}
+.ticker-option:last-child { border-bottom:none; }
+.ticker-option:hover, .ticker-option.highlighted { background:var(--bg3); }
+.ticker-option .opt-symbol {
+  font-family:var(--font-mono); font-size:12px; font-weight:600;
+  color:var(--teal); min-width:90px;
+}
+.ticker-option .opt-name {
+  font-size:11px; color:var(--text2); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;
+}
+.ticker-empty {
+  padding:12px; text-align:center; font-size:11px; color:var(--text2);
+}
+.ticker-meta {
+  font-size:10px; color:var(--text3); padding:4px 12px 6px;
+  border-bottom:1px solid var(--border); font-family:var(--font-mono);
+}
+
+/* ── INPUT SECTION ── */
+.input-section{
+  padding:20px 24px;background:var(--bg1);border-bottom:1px solid var(--border);
+}
+.input-grid{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:16px;align-items:end}
+@media(max-width:900px){.input-grid{grid-template-columns:1fr 1fr}}
+
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:10px;letter-spacing:.1em;color:var(--text2);text-transform:uppercase;font-family:var(--font-mono)}
+.field input,.field select,.field textarea{
+  background:var(--bg2);border:1px solid var(--border);
+  color:var(--text0);font-family:var(--font-mono);font-size:12px;
+  padding:7px 10px;border-radius:var(--r-sm);outline:none;width:100%;
+  transition:border-color .15s,box-shadow .15s;resize:vertical;
+}
+.field input:focus,.field select:focus,.field textarea:focus{
+  border-color:var(--teal-dim);box-shadow:0 0 0 2px var(--teal-glow);
+}
+
+/* ── OPTIONS ROW ── */
+.options-row{display:flex;gap:16px;margin-top:12px;align-items:center;flex-wrap:wrap}
+.toggle-row{display:flex;align-items:center;gap:8px}
+.toggle-label{font-size:11px;color:var(--text1)}
+.toggle{position:relative;width:42px;height:22px;cursor:pointer;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-track{position:absolute;inset:0;border-radius:11px;background:var(--bg4);transition:.2s;border:1px solid var(--border)}
+.toggle input:checked+.toggle-track{background:var(--teal-glow);border-color:var(--teal-dim)}
+.toggle-thumb{position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--text2);transition:transform .2s,background .2s}
+.toggle input:checked~.toggle-thumb{transform:translateX(20px);background:var(--teal);box-shadow:0 0 8px var(--teal)}
+
+/* ── BUTTONS ── */
+.btn{
+  display:inline-flex;align-items:center;gap:7px;padding:7px 16px;border-radius:var(--r-sm);
+  font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer;border:1px solid transparent;
+  font-family:var(--font-ui);white-space:nowrap;transition:all .15s;
+}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary{background:var(--teal);color:#000;box-shadow:0 0 12px rgba(0,212,177,.3)}
+.btn-primary:hover:not(:disabled){background:#00ffe0;box-shadow:0 0 20px rgba(0,212,177,.5)}
+.btn-outline{background:transparent;color:var(--text1);border-color:var(--border-hi)}
+.btn-outline:hover:not(:disabled){background:var(--bg3);color:var(--text0);border-color:var(--teal-dim)}
+.btn-danger{background:var(--red-glow);color:var(--red);border-color:rgba(255,59,92,.3)}
+.btn-sm{padding:5px 11px;font-size:11px}
+
+/* ── SECTION TITLE ── */
+.section-title{
+  font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--text2);text-transform:uppercase;
+  margin-bottom:12px;display:flex;align-items:center;gap:8px;
+}
+.section-title::before{content:'';display:inline-block;width:3px;height:12px;background:var(--teal);border-radius:2px}
+
+/* ── TABLE ── */
+.table-wrap{overflow-x:auto;border-radius:var(--r);border:1px solid var(--border);background:var(--bg1)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead tr{background:var(--bg2);border-bottom:1px solid var(--border-hi)}
+th{padding:9px 12px;text-align:left;font-size:9px;font-weight:600;letter-spacing:.1em;color:var(--text2);text-transform:uppercase;font-family:var(--font-mono);white-space:nowrap;cursor:pointer}
+th:hover{color:var(--text1)}
+tbody tr{border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--bg2)}
+tbody tr.active-row{background:rgba(0,212,177,.06)}
+td{padding:9px 12px;color:var(--text1);white-space:nowrap}
+td.mono{font-family:var(--font-mono);font-size:11px}
+td.ticker-cell{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--text0)}
+td.green{color:var(--green)}
+td.red{color:var(--red)}
+td.teal{color:var(--teal)}
+td.amber{color:var(--amber)}
+
+/* ── DETAIL PANEL ── */
+#detail-panel{display:none;padding:0 24px 24px}
+
+.detail-header{
+  display:flex;align-items:center;gap:16px;padding:16px 0 12px;flex-wrap:wrap;
+}
+.detail-ticker{font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--teal)}
+.detail-price{font-family:var(--font-mono);font-size:16px;color:var(--text1)}
+
+.metrics-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.metric-card{
+  flex:1;min-width:120px;background:var(--bg1);border:1px solid var(--border);
+  border-radius:var(--r);padding:12px 14px;
+}
+.metric-label{font-size:9px;letter-spacing:.12em;color:var(--text2);text-transform:uppercase;font-family:var(--font-mono)}
+.metric-value{font-family:var(--font-mono);font-size:16px;font-weight:600;color:var(--teal);margin-top:4px}
+.metric-sub{font-size:10px;color:var(--text2);margin-top:2px}
+.metric-value.green{color:var(--green)}
+.metric-value.red{color:var(--red)}
+.metric-value.amber{color:var(--amber)}
+
+/* ── TABS ── */
+.sub-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.sub-tab{
+  padding:8px 16px;font-size:11px;font-weight:600;letter-spacing:.05em;
+  color:var(--text2);cursor:pointer;border:none;background:none;position:relative;transition:color .15s;text-transform:uppercase;
+}
+.sub-tab::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:2px;
+  background:var(--teal);transform:scaleX(0);transition:transform .15s;
+}
+.sub-tab:hover{color:var(--text1)}
+.sub-tab.active{color:var(--teal)}
+.sub-tab.active::after{transform:scaleX(1)}
+.sub-tab-panel{display:none}
+.sub-tab-panel.active{display:block}
+
+/* ── VALUATION BADGE ── */
+.valuation-badge{
+  display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:12px;
+  font-size:11px;font-weight:700;font-family:var(--font-mono);margin-top:8px;
+}
+.badge-over{background:var(--red-glow);color:var(--red);border:1px solid rgba(255,59,92,.3)}
+.badge-under{background:var(--green-glow);color:var(--green);border:1px solid rgba(0,217,126,.3)}
+.badge-fair{background:rgba(74,90,112,.15);color:var(--text1);border:1px solid var(--border)}
+
+/* ── YEAR SELECTOR ── */
+.year-selector-row{
+  display:flex;align-items:center;gap:12px;margin:12px 0;flex-wrap:wrap;
+}
+.year-selector-row label{font-size:11px;color:var(--text2)}
+.year-selector{
+  background:var(--bg2);border:1px solid var(--border);color:var(--text0);
+  font-family:var(--font-mono);font-size:12px;padding:5px 10px;border-radius:var(--r-sm);
+  outline:none;
+}
+.year-selector:focus{border-color:var(--teal-dim)}
+.hist-metrics{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+
+/* ── FAILED ── */
+.failed-card{
+  background:var(--red-glow);border:1px solid rgba(255,59,92,.3);
+  border-radius:var(--r);padding:10px 14px;font-size:11px;margin-top:8px;
+}
+
+/* ── EMPTY / LOADING ── */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:60px 20px;color:var(--text2);font-size:13px;gap:10px;text-align:center;
+}
+.empty-icon{font-size:44px;opacity:.5}
+.empty-title{font-size:14px;font-weight:600;color:var(--text1)}
+.spinner{width:36px;height:36px;border-radius:50%;border:3px solid var(--bg4);border-top-color:var(--teal);animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── TOAST ── */
+#toast{position:fixed;top:70px;right:20px;z-index:2000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{
+  display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-radius:var(--r);
+  min-width:280px;max-width:380px;background:var(--bg2);border:1px solid var(--border);
+  box-shadow:0 8px 32px rgba(0,0,0,.5);animation:slideIn .25s ease;pointer-events:all;
+}
+@keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+.toast.fade-out{animation:slideOut .3s ease forwards}
+@keyframes slideOut{to{transform:translateX(20px);opacity:0}}
+.toast-title{font-size:12px;font-weight:600;color:var(--text0)}
+.toast-msg{font-size:11px;color:var(--text2);line-height:1.4}
+.toast.success{border-color:rgba(0,217,126,.35);background:rgba(0,217,126,.06)}
+.toast.error{border-color:rgba(255,59,92,.35);background:rgba(255,59,92,.06)}
+.toast.warn{border-color:rgba(255,123,41,.35);background:rgba(255,123,41,.06)}
+
+/* main content padding */
+.content{padding:20px 24px}
+.divider{height:1px;background:var(--border);margin:16px 0}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-wrap">
+    <div class="logo-icon">📊</div>
+    <div>
+      <div class="logo-title">SMA Value Screener</div>
+      <div class="logo-sub">OP & Sales vs Price</div>
+    </div>
+  </div>
+  <a class="back-link" href="/">← NSE Screener</a>
+  <div class="header-clock" id="header-clock">00:00:00</div>
+</header>
+
+<!-- ── INPUT SECTION ── -->
+<div class="input-section">
+  <div class="input-grid">
+
+    <div class="field ticker-field">
+      <label>Tickers <span id="ticker-count" style="color:var(--text3);font-weight:400"></span></label>
+      <div class="ticker-box" id="ticker-box">
+        <!-- chips injected here -->
+        <input type="text" class="ticker-search" id="ticker-search"
+               placeholder="Type symbol to search…" autocomplete="off" spellcheck="false"/>
+      </div>
+      <div class="ticker-dropdown" id="ticker-dropdown"></div>
+    </div>
+
+    <div class="field">
+      <label>Start FY Year (Apr–Mar)</label>
+      <input type="number" id="inp-fy" value="2014" min="2000" max="2030" step="1"/>
+    </div>
+
+    <div class="field" style="justify-content:flex-end">
+      <label style="visibility:hidden">Action</label>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox" id="tog-other-income" checked>
+            <span class="toggle-track"></span><span class="toggle-thumb"></span>
+          </label>
+          <span class="toggle-label">Include Other Income for Banks</span>
+        </div>
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox" id="tog-force">
+            <span class="toggle-track"></span><span class="toggle-thumb"></span>
+          </label>
+          <span class="toggle-label">Re-scrape (ignore cache)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="field" style="justify-content:flex-end">
+      <label style="visibility:hidden">Buttons</label>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-primary" id="btn-analyze">📊 Analyze</button>
+        <button class="btn btn-danger btn-sm" id="btn-clear-cache">🗑 Clear Cache</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── RESULTS ── -->
+<div id="results-section">
+  <div class="empty-state" id="empty-state">
+    <div class="empty-icon">📊</div>
+    <div class="empty-title">No analysis yet</div>
+    <div>Enter ticker(s) above and click <strong>Analyze</strong></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">Data sourced from Screener.in + yfinance</div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════
+//  UTILS
+// ════════════════════════════════════════════
+const API = {
+  async get(path) {
+    const r = await fetch(path);
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
+  async post(path, body) {
+    const r = await fetch(path, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) {
+      const msg = await r.text();
+      let p; try{ p=JSON.parse(msg); }catch(e){ p={detail:msg}; }
+      throw new Error(p.detail || msg);
+    }
+    return r.json();
+  },
+  async del(path) {
+    const r = await fetch(path, {method:'DELETE'});
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  }
+};
+
+function toast(type, title, msg='') {
+  const icons = {success:'✅',error:'❌',warn:'⚠️',info:'ℹ️'};
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${icons[type]||'•'}</span>
+    <div><div class="toast-title">${title}</div>${msg?`<div class="toast-msg">${msg}</div>`:''}</div>`;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(()=>{ el.classList.add('fade-out'); setTimeout(()=>el.remove(),350); }, 4500);
+}
+
+function fmt(n,d=2) { return n==null?'—':parseFloat(n).toFixed(d); }
+function fmtRs(n)   { return n==null?'—':`₹${parseFloat(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}`; }
+function sign(n)    { return n>0?`+${fmt(n)}%`:`${fmt(n)}%`; }
+
+setInterval(()=>{
+  const ist = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Kolkata'}));
+  document.getElementById('header-clock').textContent = ist.toTimeString().slice(0,8);
+},1000);
+
+// ════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════
+let allResults = [];
+let currentTicker = null;
+
+// ════════════════════════════════════════════
+//  TICKER AUTOCOMPLETE
+// ════════════════════════════════════════════
+let selectedTickers = [];
+let dropdownHighlight = -1;
+let searchDebounce = null;
+let allTickersTotal = 0;
+
+function renderChips() {
+  const box = document.getElementById('ticker-box');
+  // Remove old chips (keep the input)
+  box.querySelectorAll('.ticker-chip').forEach(c => c.remove());
+  const search = document.getElementById('ticker-search');
+  selectedTickers.forEach(sym => {
+    const chip = document.createElement('span');
+    chip.className = 'ticker-chip';
+    chip.innerHTML = `${sym}<span class="ticker-chip-remove" data-sym="${sym}">×</span>`;
+    box.insertBefore(chip, search);
+  });
+  // Update count label
+  const cnt = document.getElementById('ticker-count');
+  if (cnt) cnt.textContent = selectedTickers.length ? `(${selectedTickers.length} selected)` : '';
+}
+
+function addTicker(sym) {
+  sym = sym.trim().toUpperCase();
+  if (!sym || selectedTickers.includes(sym)) return;
+  if (selectedTickers.length >= 10) {
+    toast('warn', 'Max 10 tickers at once'); return;
+  }
+  selectedTickers.push(sym);
+  renderChips();
+  document.getElementById('ticker-search').value = '';
+  closeDropdown();
+}
+
+function removeTicker(sym) {
+  selectedTickers = selectedTickers.filter(s => s !== sym);
+  renderChips();
+}
+
+function closeDropdown() {
+  document.getElementById('ticker-dropdown').classList.remove('open');
+  dropdownHighlight = -1;
+}
+
+async function searchTickers(q) {
+  const dd = document.getElementById('ticker-dropdown');
+  if (!q.trim()) { closeDropdown(); return; }
+
+  try {
+    const res = await API.get(`/api/sma/tickers?q=${encodeURIComponent(q)}`);
+    if (!res.tickers.length) {
+      dd.innerHTML = `<div class="ticker-empty">No matches for "${q}"</div>`;
+      dd.classList.add('open');
+      return;
+    }
+    const metaLine = res.total
+      ? `<div class="ticker-meta">${res.total} tickers in tickers.csv</div>` : '';
+    dd.innerHTML = metaLine + res.tickers.map((t, i) =>
+      `<div class="ticker-option ${selectedTickers.includes(t.symbol)?'already-selected':''}"
+            data-sym="${t.symbol}" data-idx="${i}">
+        <span class="opt-symbol">${highlight(t.symbol, q)}</span>
+        ${t.name && t.name !== t.symbol ? `<span class="opt-name">${highlight(t.name, q)}</span>` : ''}
+      </div>`
+    ).join('');
+    dd.classList.add('open');
+    dropdownHighlight = -1;
+  } catch(e) {
+    closeDropdown();
+  }
+}
+
+function highlight(text, q) {
+  if (!q) return text;
+  const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+  return text.replace(re, `<strong style="color:var(--teal)">$1</strong>`);
+}
+
+// ── Wire up events
+document.addEventListener('DOMContentLoaded', () => {
+  const search = document.getElementById('ticker-search');
+  const box    = document.getElementById('ticker-box');
+  const dd     = document.getElementById('ticker-dropdown');
+
+  // Click on box → focus input
+  box.addEventListener('click', e => {
+    if (e.target.classList.contains('ticker-chip-remove')) {
+      removeTicker(e.target.dataset.sym); return;
+    }
+    search.focus();
+  });
+
+  // Typing → debounced search
+  search.addEventListener('input', () => {
+    clearTimeout(searchDebounce);
+    const q = search.value.trim();
+    if (!q) { closeDropdown(); return; }
+    searchDebounce = setTimeout(() => searchTickers(q), 180);
+  });
+
+  // Keyboard nav
+  search.addEventListener('keydown', e => {
+    const opts = dd.querySelectorAll('.ticker-option');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      dropdownHighlight = Math.min(dropdownHighlight + 1, opts.length - 1);
+      opts.forEach((o,i)=>o.classList.toggle('highlighted', i===dropdownHighlight));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      dropdownHighlight = Math.max(dropdownHighlight - 1, 0);
+      opts.forEach((o,i)=>o.classList.toggle('highlighted', i===dropdownHighlight));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (dropdownHighlight >= 0 && opts[dropdownHighlight]) {
+        addTicker(opts[dropdownHighlight].dataset.sym);
+      } else if (search.value.trim()) {
+        addTicker(search.value.trim());
+      }
+    } else if (e.key === 'Backspace' && !search.value && selectedTickers.length) {
+      removeTicker(selectedTickers[selectedTickers.length - 1]);
+    } else if (e.key === 'Escape') {
+      closeDropdown();
+    }
+  });
+
+  // Click on dropdown option
+  dd.addEventListener('click', e => {
+    const opt = e.target.closest('.ticker-option');
+    if (opt) addTicker(opt.dataset.sym);
+  });
+
+  // Close on outside click
+  document.addEventListener('click', e => {
+    if (!box.contains(e.target) && !dd.contains(e.target)) closeDropdown();
+  });
+
+  // Pre-load ticker count on page open
+  API.get('/api/sma/tickers?q=').then(res => {
+    if (res.total) {
+      const cnt = document.getElementById('ticker-count');
+      if (cnt && !selectedTickers.length)
+        cnt.textContent = `(${res.total} available)`;
+    }
+  }).catch(()=>{});
+});
+
+// ════════════════════════════════════════════
+//  ANALYZE
+// ════════════════════════════════════════════
+document.getElementById('btn-analyze').addEventListener('click', analyze);
+document.getElementById('btn-clear-cache').addEventListener('click', clearCache);
+
+async function analyze() {
+  if (!selectedTickers.length) { toast('warn','Add at least one ticker'); return; }
+
+  const fy    = parseInt(document.getElementById('inp-fy').value) || 2014;
+  const force = document.getElementById('tog-force').checked;
+  const oi    = document.getElementById('tog-other-income').checked;
+
+  showLoading(selectedTickers.length);
+  const btn = document.getElementById('btn-analyze');
+  btn.disabled = true;
+
+  try {
+    const res = await API.post('/api/sma/analyze', {
+      tickers: selectedTickers, fy_start: fy, force_scrape: force, include_other_income: oi
+    });
+    allResults = res.results || [];
+    renderSummary(allResults, res.failed || []);
+    if (allResults.length) {
+      toast('success', `${allResults.length} ticker(s) analyzed`,
+            res.failed.length ? `${res.failed.length} failed` : '');
+    } else {
+      toast('error','Analysis failed','Check tickers or Screener.in availability');
+    }
+  } catch(err) {
+    showEmpty();
+    toast('error','Request failed', err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function clearCache() {
+  try {
+    const r = await API.del('/api/sma/cache');
+    toast('success',`Cache cleared — ${r.removed} files removed`);
+  } catch(e) {
+    toast('error','Cache clear failed',e.message);
+  }
+}
+
+function showLoading(n) {
+  document.getElementById('results-section').innerHTML = `
+    <div class="empty-state">
+      <div class="spinner"></div>
+      <div class="empty-title">Analyzing ${n} ticker${n>1?'s':''}…</div>
+      <div>Scraping Screener.in + downloading prices via yfinance</div>
+      <div style="font-size:11px;color:var(--text3)">This may take 15–60 seconds per ticker</div>
+    </div>`;
+}
+function showEmpty() {
+  document.getElementById('results-section').innerHTML = `
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">📊</div><div class="empty-title">No analysis yet</div>
+      <div>Enter ticker(s) above and click <strong>Analyze</strong></div>
+    </div>`;
+}
+
+// ════════════════════════════════════════════
+//  RENDER SUMMARY TABLE
+// ════════════════════════════════════════════
+function renderSummary(results, failed) {
+  const rows = results.map(r => {
+    const gain = r.op?.gain_pct ?? 0;
+    const gainCls = gain>0?'green':(gain<0?'red':'');
+    return `<tr data-ticker="${r.ticker}" class="${currentTicker===r.ticker?'active-row':''}">
+      <td class="ticker-cell">${r.ticker}</td>
+      <td class="mono">${fmtRs(r.current_price)}</td>
+      <td class="mono">${fmtRs(r.op?.pred_price)}</td>
+      <td class="mono ${gainCls}">${sign(r.op?.gain_pct)}</td>
+      <td class="mono">${r.op?.r2 ?? '—'}</td>
+      <td class="mono">${r.years_count}</td>
+      <td class="mono" style="color:var(--text2)">${r.profit_label||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const failedHtml = failed.length ? `
+    <div style="padding:0 24px 12px">
+      <div class="section-title" style="color:var(--red)">Failed Tickers</div>
+      ${failed.map(f=>`<div class="failed-card">
+        <strong style="color:var(--red)">${f.ticker}</strong>: ${f.error}
+      </div>`).join('')}
+    </div>` : '';
+
+  document.getElementById('results-section').innerHTML = `
+    <div class="content">
+      <div class="section-title">
+        Batch Summary
+        <span style="margin-left:auto;font-size:10px;color:var(--text2);font-weight:400">
+          ${results.length} analyzed, ${failed.length} failed
+        </span>
+        <button class="btn btn-outline btn-sm" id="btn-download-batch">⬇ Export CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Ticker</th><th>Current Price</th><th>Forecasted</th>
+            <th>Upside</th><th>R²</th><th>Years</th><th>Model</th>
+          </tr></thead>
+          <tbody id="summary-tbody">${rows}</tbody>
+        </table>
+      </div>
+    </div>
+    ${failedHtml}
+    <div class="divider" style="margin:0 24px"></div>
+    <div id="detail-panel"></div>
+  `;
+
+  document.getElementById('btn-download-batch').addEventListener('click', downloadBatch);
+
+  document.querySelectorAll('#summary-tbody tr[data-ticker]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      document.querySelectorAll('#summary-tbody tr').forEach(r=>r.classList.remove('active-row'));
+      tr.classList.add('active-row');
+      currentTicker = tr.dataset.ticker;
+      const res = allResults.find(r=>r.ticker===currentTicker);
+      if (res) renderDetail(res);
+    });
+  });
+
+  // Auto-open first result
+  if (results.length) {
+    currentTicker = results[0].ticker;
+    document.querySelector('#summary-tbody tr[data-ticker]')?.classList.add('active-row');
+    renderDetail(results[0]);
+  }
+}
+
+// ════════════════════════════════════════════
+//  RENDER DETAIL
+// ════════════════════════════════════════════
+function renderDetail(res) {
+  const panel = document.getElementById('detail-panel');
+  panel.style.display = 'block';
+
+  const op = res.op || {};
+  const gain = op.gain_pct ?? 0;
+  const gainCls = gain>0?'green':(gain<0?'red':'amber');
+
+  // Build tabs
+  const tabs = ['📈 OP Model'];
+  if (res.has_sales) tabs.push('💰 Sales Model');
+  if (res.has_ttm)   tabs.push('📅 TTM Analysis');
+  tabs.push('📉 Price History');
+
+  panel.innerHTML = `
+    <div class="detail-header">
+      <span class="detail-ticker">${res.ticker}</span>
+      <span class="detail-price">${fmtRs(res.current_price)}</span>
+      <span style="font-size:11px;color:var(--text2)">${res.profit_label||''}</span>
+      ${res.is_bank?'<span style="font-size:10px;padding:2px 8px;background:var(--blue-glow);color:var(--blue);border-radius:10px;border:1px solid rgba(61,155,255,.3)">BANK/NBFC</span>':''}
+    </div>
+
+    <div class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-label">Current Price</div>
+        <div class="metric-value">${fmtRs(res.current_price)}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">OP Forecasted</div>
+        <div class="metric-value ${gainCls}">${fmtRs(op.pred_price)}</div>
+        <div class="metric-sub">${sign(op.gain_pct)}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">R² (OP Model)</div>
+        <div class="metric-value">${op.r2 ?? '—'}</div>
+        <div class="metric-sub">${op.eq||''}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Years of Data</div>
+        <div class="metric-value">${res.years_count}</div>
+        <div class="metric-sub">FY data points</div>
+      </div>
+      ${res.has_ttm?`
+      <div class="metric-card">
+        <div class="metric-label">TTM Forecasted</div>
+        <div class="metric-value ${(res.ttm?.gain_pct??0)>0?'green':'red'}">${fmtRs(res.ttm?.pred_price)}</div>
+        <div class="metric-sub">${sign(res.ttm?.gain_pct)}</div>
+      </div>`:''
+      }
+    </div>
+
+    <div class="sub-tabs" id="sub-tabs">
+      ${tabs.map((t,i)=>`<button class="sub-tab${i===0?' active':''}" data-tab="${i}">${t}</button>`).join('')}
+    </div>
+
+    ${tabs.map((t,i)=>`<div class="sub-tab-panel${i===0?' active':''}" id="tab-panel-${i}">
+      ${buildTabContent(res, t)}
+    </div>`).join('')}
+  `;
+
+  // Sub-tab switching
+  panel.querySelectorAll('.sub-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      panel.querySelectorAll('.sub-tab').forEach(b=>b.classList.remove('active'));
+      panel.querySelectorAll('.sub-tab-panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      panel.querySelector(`#tab-panel-${btn.dataset.tab}`).classList.add('active');
+      renderTabCharts(res, parseInt(btn.dataset.tab), tabs);
+    });
+  });
+
+  // Render first tab charts immediately
+  renderTabCharts(res, 0, tabs);
+
+  // Year selectors for historical
+  panel.querySelectorAll('.hist-year-sel').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const model = sel.dataset.model;
+      const yr    = sel.value;
+      updateHistMetrics(res, model, yr);
+    });
+  });
+}
+
+// ════════════════════════════════════════════
+//  BUILD TAB HTML
+// ════════════════════════════════════════════
+function buildTabContent(res, tabLabel) {
+  if (tabLabel.includes('OP Model')) {
+    return buildModelTab(res, 'op');
+  } else if (tabLabel.includes('Sales')) {
+    return buildModelTab(res, 'sales');
+  } else if (tabLabel.includes('TTM')) {
+    return buildTTMTab(res);
+  } else if (tabLabel.includes('Price History')) {
+    return `<div id="chart-price-hist" style="height:380px;margin-top:8px"></div>`;
+  }
+  return '';
+}
+
+function buildModelTab(res, modelKey) {
+  const m = modelKey==='op' ? res.op : res.sales;
+  if (!m || !m.series || !m.series.length) return '<div class="empty-state"><div>No data available</div></div>';
+  const years = m.series.map(s=>s.year);
+
+  // Valuation badge
+  const avgRatio = m.series.reduce((s,r)=>s+r.ratio,0)/m.series.length;
+  const lastRatio = m.series[m.series.length-1].ratio;
+  const chg = avgRatio ? ((lastRatio-avgRatio)/avgRatio*100) : 0;
+  const badgeCls = chg>20?'badge-over':(chg<-20?'badge-under':'badge-fair');
+  const badgeTxt = chg>20?'Overvalued':(chg<-20?'Undervalued':'Fairly Valued');
+  const metricName = modelKey==='op'?res.profit_label:'Sales';
+
+  return `
+    <div id="chart-${modelKey}" style="height:380px;margin-top:8px"></div>
+    <div style="padding:4px 0 12px">
+      <div class="valuation-badge ${badgeCls}">
+        ${badgeTxt} — Avg ratio: ${fmt(avgRatio,4)} | Latest: ${fmt(lastRatio,4)} (${sign(chg)})
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="section-title">Historical Valuation</div>
+    <div class="year-selector-row">
+      <label>Select FY Year:</label>
+      <select class="year-selector hist-year-sel" data-model="${modelKey}">
+        ${years.map(y=>`<option value="${y}">${y}</option>`).join('')}
+      </select>
+    </div>
+    <div class="hist-metrics" id="hist-metrics-${modelKey}"></div>
+  `;
+}
+
+function buildTTMTab(res) {
+  const ttm = res.ttm || {};
+  if (!ttm.series || !ttm.series.length) return '<div class="empty-state"><div>No TTM data</div></div>';
+  const quarters = ttm.series.map(s=>s.quarter);
+  const hasTtmSales = ttm.sales && ttm.sales.series && ttm.sales.series.length;
+
+  return `
+    <div style="padding:4px 0 8px;display:flex;gap:10px;flex-wrap:wrap">
+      <div class="metric-card" style="flex:0 1 auto">
+        <div class="metric-label">TTM Forecasted</div>
+        <div class="metric-value ${(ttm.gain_pct||0)>0?'green':'red'}">${fmtRs(ttm.pred_price)}</div>
+        <div class="metric-sub">${sign(ttm.gain_pct)}</div>
+      </div>
+      <div class="metric-card" style="flex:0 1 auto">
+        <div class="metric-label">R² (TTM)</div>
+        <div class="metric-value">${ttm.r2??'—'}</div>
+        <div class="metric-sub">${ttm.eq||''}</div>
+      </div>
+      ${hasTtmSales?`
+      <div class="metric-card" style="flex:0 1 auto">
+        <div class="metric-label">TTM Sales Fcst</div>
+        <div class="metric-value ${(ttm.sales.gain_pct||0)>0?'green':'red'}">${fmtRs(ttm.sales.pred_price)}</div>
+        <div class="metric-sub">${sign(ttm.sales.gain_pct)}</div>
+      </div>`:''}
+    </div>
+    <div id="chart-ttm" style="height:380px;margin-top:8px"></div>
+    <div class="divider"></div>
+    <div class="section-title">Historical TTM Valuation</div>
+    <div class="year-selector-row">
+      <label>Select Quarter:</label>
+      <select class="year-selector hist-year-sel" data-model="ttm">
+        ${quarters.map(q=>`<option value="${q}">${q}</option>`).join('')}
+      </select>
+    </div>
+    <div class="hist-metrics" id="hist-metrics-ttm"></div>
+    ${hasTtmSales?`
+    <div class="divider" style="margin-top:20px"></div>
+    <div class="section-title">TTM Sales Model</div>
+    <div id="chart-ttm-sales" style="height:340px;margin-top:8px"></div>`:''}
+  `;
+}
+
+// ════════════════════════════════════════════
+//  RENDER CHARTS PER TAB
+// ════════════════════════════════════════════
+function renderTabCharts(res, tabIdx, tabs) {
+  const label = tabs[tabIdx];
+  setTimeout(() => {
+    if (label.includes('OP Model')) {
+      drawModelChart(res.op, 'chart-op', '#9b59b6', '#FF0000', res.profit_label, 'OP (Cr)', res.ticker);
+      updateHistMetrics(res, 'op', res.op.series[res.op.series.length-1]?.year);
+      document.querySelector('.hist-year-sel[data-model="op"]')?.dispatchEvent(new Event('change'));
+    } else if (label.includes('Sales')) {
+      if (res.has_sales) {
+        drawModelChart(res.sales, 'chart-sales', '#3d9bff', '#FF0000', res.sales.label, 'Sales (Cr)', res.ticker);
+        updateHistMetrics(res, 'sales', res.sales.series[res.sales.series.length-1]?.year);
+      }
+    } else if (label.includes('TTM')) {
+      if (res.has_ttm) {
+        drawTTMChart(res.ttm, 'chart-ttm', res.profit_label, res.ticker);
+        updateHistMetrics(res, 'ttm', res.ttm.series[res.ttm.series.length-1]?.quarter);
+        if (res.ttm.sales?.series) {
+          drawTTMChart(res.ttm.sales, 'chart-ttm-sales', res.ttm.sales.label, res.ticker);
+        }
+      }
+    } else if (label.includes('Price')) {
+      drawPriceChart(res.price_history, 'chart-price-hist', res.ticker);
+    }
+  }, 50);
+}
+
+function drawModelChart(model, divId, fundColor, priceColor, fundLabel, yLabel, ticker) {
+  if (!model?.series?.length || !document.getElementById(divId)) return;
+  const years  = model.series.map(s=>s.year);
+  const fund   = model.series.map(s=>s.profit ?? s.sales);
+  const prices = model.series.map(s=>s.price);
+  Plotly.react(divId, [
+    { x:years, y:fund,   name:fundLabel, type:'scatter', mode:'lines+markers',
+      line:{color:fundColor,width:3}, marker:{size:7}, yaxis:'y' },
+    { x:years, y:prices, name:'FY End Price', type:'scatter', mode:'lines+markers',
+      line:{color:priceColor,width:3}, marker:{size:7}, yaxis:'y2' },
+  ], {
+    paper_bgcolor:'#070f1c', plot_bgcolor:'#070f1c',
+    font:{family:"'JetBrains Mono',monospace",size:11,color:'#7a91b0'},
+    margin:{l:60,r:60,t:30,b:50},
+    xaxis:{gridcolor:'#1a3150',tickfont:{size:10},title:{text:'FY Year',font:{size:11}}},
+    yaxis:{gridcolor:'#1a3150',tickprefix:'₹',title:{text:yLabel,font:{size:11,color:fundColor}},side:'left'},
+    yaxis2:{overlaying:'y',side:'right',showgrid:false,tickprefix:'₹',
+            title:{text:'FY End Price',font:{size:11,color:priceColor}}},
+    legend:{bgcolor:'rgba(0,0,0,0)',font:{size:10}},
+    autosize:true,
+  }, {responsive:true,displayModeBar:false});
+}
+
+function drawTTMChart(model, divId, label, ticker) {
+  if (!model?.series?.length || !document.getElementById(divId)) return;
+  const quarters = model.series.map(s=>s.quarter);
+  const ttmv     = model.series.map(s=>s.ttm_profit ?? s.ttm_sales);
+  const prices   = model.series.map(s=>s.price);
+  Plotly.react(divId, [
+    { x:quarters, y:ttmv,   name:`${label} TTM`, type:'scatter', mode:'lines+markers',
+      line:{color:'#9b59b6',width:3}, marker:{size:7}, yaxis:'y' },
+    { x:quarters, y:prices, name:'Qtr End Price', type:'scatter', mode:'lines+markers',
+      line:{color:'#FF0000',width:3}, marker:{size:7}, yaxis:'y2' },
+  ], {
+    paper_bgcolor:'#070f1c', plot_bgcolor:'#070f1c',
+    font:{family:"'JetBrains Mono',monospace",size:11,color:'#7a91b0'},
+    margin:{l:60,r:60,t:30,b:50},
+    xaxis:{gridcolor:'#1a3150',tickfont:{size:10}},
+    yaxis:{gridcolor:'#1a3150',tickprefix:'₹',title:{text:`${label} TTM (Cr)`,font:{size:11,color:'#9b59b6'}},side:'left'},
+    yaxis2:{overlaying:'y',side:'right',showgrid:false,tickprefix:'₹',
+            title:{text:'Qtr End Price',font:{size:11,color:'#FF0000'}}},
+    legend:{bgcolor:'rgba(0,0,0,0)',font:{size:10}},
+    autosize:true,
+  },{responsive:true,displayModeBar:false});
+}
+
+function drawPriceChart(hist, divId, ticker) {
+  if (!hist?.length || !document.getElementById(divId)) return;
+  const dates  = hist.map(h=>h.date);
+  const closes = hist.map(h=>h.close);
+  Plotly.react(divId, [{
+    x:dates, y:closes, type:'scatter', mode:'lines', name:ticker,
+    line:{color:'#3d9bff',width:2},
+    fill:'tozeroy', fillcolor:'rgba(61,155,255,0.05)',
+  }], {
+    paper_bgcolor:'#070f1c', plot_bgcolor:'#070f1c',
+    font:{family:"'JetBrains Mono',monospace",size:11,color:'#7a91b0'},
+    margin:{l:60,r:20,t:30,b:50},
+    xaxis:{gridcolor:'#1a3150',tickfont:{size:10},title:{text:'Date',font:{size:11}}},
+    yaxis:{gridcolor:'#1a3150',tickprefix:'₹',side:'right',title:{text:'Close (₹)',font:{size:11}}},
+    autosize:true,
+  },{responsive:true,displayModeBar:false});
+}
+
+// ════════════════════════════════════════════
+//  HISTORICAL METRICS
+// ════════════════════════════════════════════
+function updateHistMetrics(res, modelKey, selectedKey) {
+  const container = document.getElementById(`hist-metrics-${modelKey}`);
+  if (!container) return;
+
+  let hist, metricKey, metricLabel;
+  if (modelKey==='op') {
+    hist = res.op?.historical || {};
+    metricKey = 'profit'; metricLabel = res.profit_label||'OP';
+  } else if (modelKey==='sales') {
+    hist = res.sales?.historical || {};
+    metricKey = 'sales'; metricLabel = res.sales?.label||'Sales';
+  } else {
+    hist = res.ttm?.historical || {};
+    metricKey = 'ttm'; metricLabel = `${res.profit_label||'OP'} TTM`;
+  }
+
+  if (!selectedKey) { const keys = Object.keys(hist); selectedKey = keys[keys.length-1]; }
+  const h = hist[selectedKey];
+  if (!h) { container.innerHTML = '<div style="color:var(--text2);font-size:11px">No data for this period</div>'; return; }
+
+  const mp = h.misprice_pct ?? 0;
+  const statusCls = h.status==='Overvalued'?'badge-over':(h.status==='Undervalued'?'badge-under':'badge-fair');
+
+  container.innerHTML = `
+    <div class="metric-card">
+      <div class="metric-label">${metricLabel}</div>
+      <div class="metric-value">${fmtRs(h[metricKey]??h.ttm??h.ttm_sales)} Cr</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Fair Price</div>
+      <div class="metric-value">${fmtRs(h.fair)}</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Actual Price</div>
+      <div class="metric-value">${fmtRs(h.actual)}</div>
+      <div class="metric-sub">${sign(mp)} vs fair</div>
+    </div>
+    <div style="display:flex;align-items:center">
+      <div class="valuation-badge ${statusCls}">${h.status||'—'}</div>
+    </div>
+  `;
+
+  // Sync select
+  const sel = document.querySelector(`.hist-year-sel[data-model="${modelKey}"]`);
+  if (sel && sel.value !== selectedKey) sel.value = selectedKey;
+}
+
+// ════════════════════════════════════════════
+//  HIST YEAR SELECT LISTENER (delegated)
+// ════════════════════════════════════════════
+document.addEventListener('change', e => {
+  if (!e.target.classList.contains('hist-year-sel')) return;
+  const model = e.target.dataset.model;
+  const res   = allResults.find(r=>r.ticker===currentTicker);
+  if (res) updateHistMetrics(res, model, e.target.value);
+});
+
+// ════════════════════════════════════════════
+//  BATCH CSV DOWNLOAD
+// ════════════════════════════════════════════
+function downloadBatch() {
+  if (!allResults.length) return;
+  const rows = allResults.map(r => ({
+    ticker:            r.ticker,
+    current_price:     r.current_price,
+    op_forecasted:     r.op?.pred_price,
+    op_gain_pct:       r.op?.gain_pct,
+    op_r2:             r.op?.r2,
+    sales_forecasted:  r.sales?.pred_price ?? '',
+    sales_gain_pct:    r.sales?.gain_pct ?? '',
+    ttm_forecasted:    r.ttm?.pred_price ?? '',
+    ttm_gain_pct:      r.ttm?.gain_pct ?? '',
+    years_count:       r.years_count,
+    profit_label:      r.profit_label,
+  }));
+  const keys = Object.keys(rows[0]);
+  const csv  = [keys.join(','), ...rows.map(r=>keys.map(k=>r[k]??'').join(','))].join('\n');
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `sma_analysis_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,2529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>NSE Momentum Loss Screener</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root {
+  --bg0: #030912;
+  --bg1: #070f1c;
+  --bg2: #0c1929;
+  --bg3: #101f30;
+  --bg4: #162840;
+  --border: #1a3150;
+  --border-hi: #1e4a72;
+  --teal: #00d4b1;
+  --teal-dim: #007a68;
+  --teal-glow: rgba(0,212,177,0.15);
+  --amber: #ff7b29;
+  --amber-dim: #8a4110;
+  --amber-glow: rgba(255,123,41,0.15);
+  --blue: #3d9bff;
+  --blue-glow: rgba(61,155,255,0.15);
+  --red: #ff3b5c;
+  --red-glow: rgba(255,59,92,0.15);
+  --green: #00d97e;
+  --green-glow: rgba(0,217,126,0.12);
+  --text0: #e8edf5;
+  --text1: #9ab2cc;
+  --text2: #4d6b8a;
+  --text3: #2a4060;
+  --font-ui: 'Exo 2', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --r: 8px;
+  --r-sm: 5px;
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+
+html { height:100%; }
+
+body {
+  font-family: var(--font-ui);
+  background: var(--bg0);
+  color: var(--text0);
+  height:100%;
+  overflow-x:hidden;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,100,200,0.08) 0%, transparent 70%),
+    repeating-linear-gradient(0deg, transparent, transparent 39px, var(--border) 39px, var(--border) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, var(--border) 39px, var(--border) 40px);
+  background-size: 100% 100%, 40px 40px, 40px 40px;
+  background-attachment: fixed;
+}
+
+/* ── SCROLLBAR ─────────────────────────────── */
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:var(--bg1); }
+::-webkit-scrollbar-thumb { background:var(--bg4); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:var(--border-hi); }
+
+/* ── LAYOUT ─────────────────────────────────── */
+#app { display:flex; flex-direction:column; height:100vh; }
+
+/* ── HEADER ─────────────────────────────────── */
+header {
+  display:flex; align-items:center; gap:0;
+  height:54px; min-height:54px;
+  padding: 0 20px;
+  background: linear-gradient(180deg, rgba(0,20,40,0.95) 0%, rgba(7,15,28,0.97) 100%);
+  border-bottom: 1px solid var(--border-hi);
+  position:relative; z-index:100;
+  backdrop-filter: blur(10px);
+}
+
+.header-logo {
+  display:flex; align-items:center; gap:10px;
+  margin-right:32px;
+}
+.logo-icon {
+  width:32px; height:32px;
+  background: linear-gradient(135deg, var(--teal) 0%, var(--blue) 100%);
+  border-radius:var(--r-sm);
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px; font-weight:800;
+  color:#000; font-family:var(--font-mono);
+  position:relative;
+  box-shadow: 0 0 20px rgba(0,212,177,0.4);
+}
+.header-title {
+  font-size:15px; font-weight:700; letter-spacing:0.04em;
+  color:var(--text0);
+  line-height:1;
+}
+.header-sub {
+  font-size:10px; font-weight:400; letter-spacing:0.1em;
+  color:var(--text2); margin-top:2px;
+  font-family:var(--font-mono); text-transform:uppercase;
+}
+
+.header-stats {
+  display:flex; align-items:center; gap:1px;
+  flex:1;
+}
+.hstat {
+  display:flex; flex-direction:column; align-items:center;
+  padding: 0 18px; height:54px; justify-content:center;
+  border-right: 1px solid var(--border);
+  cursor:default;
+  transition: background .15s;
+  gap:2px;
+}
+.hstat:hover { background: rgba(255,255,255,0.03); }
+.hstat-label {
+  font-size:9px; letter-spacing:0.12em; color:var(--text2);
+  text-transform:uppercase; font-family:var(--font-mono);
+}
+.hstat-value {
+  font-size:14px; font-weight:600; font-family:var(--font-mono);
+  color:var(--text1); white-space:nowrap;
+}
+.hstat-value.teal { color:var(--teal); }
+.hstat-value.amber { color:var(--amber); }
+.hstat-value.green { color:var(--green); }
+.hstat-value.red { color:var(--red); }
+
+.market-badge {
+  display:flex; align-items:center; gap:6px;
+  padding: 5px 12px;
+  border-radius:20px;
+  font-size:11px; font-weight:600;
+  font-family:var(--font-mono); letter-spacing:0.05em;
+  margin-left:auto;
+}
+.market-badge.open {
+  background: var(--green-glow);
+  border: 1px solid rgba(0,217,126,0.4);
+  color: var(--green);
+}
+.market-badge.closed {
+  background: rgba(74,90,112,0.15);
+  border: 1px solid var(--border);
+  color: var(--text2);
+}
+.market-badge .dot {
+  width:7px; height:7px; border-radius:50%;
+  background:currentColor;
+}
+.market-badge.open .dot {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%      { opacity:0.4; transform:scale(0.85); }
+}
+
+.header-clock {
+  margin-left:20px;
+  font-family:var(--font-mono); font-size:13px; font-weight:500;
+  color:var(--teal); letter-spacing:0.05em;
+  padding: 0 14px;
+  border-left: 1px solid var(--border);
+  height:54px; display:flex; align-items:center;
+}
+
+/* ── NAV TABS ─────────────────────────────────── */
+nav {
+  display:flex; align-items:flex-end; gap:2px;
+  padding: 0 20px;
+  background: var(--bg1);
+  border-bottom: 1px solid var(--border);
+  height:44px;
+}
+.nav-tab {
+  display:flex; align-items:center; gap:7px;
+  padding: 0 16px; height:44px;
+  font-size:10px; font-weight:600; letter-spacing:0.05em;
+  color:var(--text2); cursor:pointer; border:none; background:none;
+  position:relative; white-space:nowrap;
+  transition: color .15s;
+  text-transform:uppercase;
+}
+.nav-tab::after {
+  content:''; position:absolute; bottom:0; left:0; right:0;
+  height:2px; background:var(--teal);
+  transform:scaleX(0); transition:transform .15s;
+}
+.nav-tab:hover { color:var(--text1); }
+.nav-tab.active { color:var(--teal); }
+.nav-tab.active::after { transform:scaleX(1); }
+.tab-badge {
+  background:var(--bg4); color:var(--text1);
+  border-radius:10px; padding:1px 7px;
+  font-size:10px; font-weight:700; font-family:var(--font-mono);
+  min-width:18px; text-align:center;
+}
+.nav-tab.active .tab-badge { background:var(--teal-glow); color:var(--teal); }
+
+/* ── MAIN CONTENT ─────────────────────────────── */
+main {
+  flex:1; overflow:hidden; display:flex;
+  flex-direction:column;
+}
+.tab-panel {
+  display:none; flex:1; overflow:hidden;
+  flex-direction:column;
+}
+.tab-panel.active { display:flex; }
+.panel-body {
+  flex:1; overflow-y:auto;
+  padding:20px;
+}
+
+/* ── ACTION BAR ────────────────────────────────── */
+.action-bar {
+  display:flex; align-items:center; gap:8px;
+  padding: 10px 20px;
+  background: var(--bg1);
+  border-bottom: 1px solid var(--border);
+  flex-wrap:wrap;
+}
+.specific-row {
+  display:flex; align-items:center; gap:6px; margin-left:8px;
+}
+.specific-input {
+  background:var(--bg2); border:1px solid var(--border);
+  color:var(--text0); font-family:var(--font-mono); font-size:12px;
+  padding:6px 12px; border-radius:var(--r-sm);
+  outline:none; width:280px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.specific-input:focus {
+  border-color:var(--teal-dim);
+  box-shadow: 0 0 0 2px var(--teal-glow);
+}
+.specific-input::placeholder { color:var(--text3); }
+
+/* ── BUTTONS ────────────────────────────────────── */
+.btn {
+  display:inline-flex; align-items:center; gap:7px;
+  padding: 7px 16px; border-radius:var(--r-sm);
+  font-size:12px; font-weight:600; letter-spacing:0.04em;
+  cursor:pointer; border:1px solid transparent;
+  font-family:var(--font-ui); white-space:nowrap;
+  transition: all .15s;
+}
+.btn:disabled { opacity:0.4; cursor:not-allowed; }
+.btn-primary {
+  background: var(--teal); color:#000;
+  box-shadow: 0 0 12px rgba(0,212,177,0.3);
+}
+.btn-primary:hover:not(:disabled) {
+  background:#00ffe0;
+  box-shadow: 0 0 20px rgba(0,212,177,0.5);
+}
+.btn-outline {
+  background: transparent; color:var(--text1);
+  border-color: var(--border-hi);
+}
+.btn-outline:hover:not(:disabled) {
+  background:var(--bg3); color:var(--text0); border-color:var(--teal-dim);
+}
+.btn-amber {
+  background:var(--amber-glow); color:var(--amber);
+  border-color: rgba(255,123,41,0.4);
+}
+.btn-amber:hover:not(:disabled) {
+  background:rgba(255,123,41,0.25);
+}
+.btn-danger {
+  background:var(--red-glow); color:var(--red);
+  border-color:rgba(255,59,92,0.3);
+}
+.btn-danger:hover:not(:disabled) {
+  background:rgba(255,59,92,0.2);
+}
+.btn-sm { padding:5px 11px; font-size:11px; }
+.btn-icon { padding:7px 10px; }
+
+/* ── TABLE ────────────────────────────────────── */
+.table-wrap {
+  overflow-x:auto; border-radius:var(--r);
+  border:1px solid var(--border);
+  background:var(--bg1);
+}
+table {
+  width:100%; border-collapse:collapse;
+  font-size:12px;
+}
+thead tr {
+  background:var(--bg2);
+  border-bottom:1px solid var(--border-hi);
+}
+th {
+  padding:10px 14px; text-align:left;
+  font-size:10px; font-weight:600; letter-spacing:0.1em;
+  color:var(--text2); text-transform:uppercase;
+  font-family:var(--font-mono); white-space:nowrap;
+  cursor:pointer; user-select:none;
+}
+th:hover { color:var(--text1); }
+th .sort-arrow { font-size:10px; margin-left:4px; opacity:0.5; }
+th.sorted .sort-arrow { opacity:1; color:var(--teal); }
+
+tbody tr {
+  border-bottom:1px solid var(--border);
+  cursor:pointer; transition:background .1s;
+}
+tbody tr:last-child { border-bottom:none; }
+tbody tr:hover { background:var(--bg2); }
+tbody tr.selected { background:rgba(0,212,177,0.06); }
+
+td {
+  padding:10px 14px;
+  color:var(--text1); white-space:nowrap;
+}
+td.mono { font-family:var(--font-mono); font-size:11px; }
+td.ticker {
+  font-family:var(--font-mono); font-size:13px; font-weight:600;
+  color:var(--text0); letter-spacing:0.05em;
+}
+td.teal { color:var(--teal); font-family:var(--font-mono); }
+td.green { color:var(--green); font-family:var(--font-mono); }
+td.red { color:var(--red); font-family:var(--font-mono); }
+td.amber { color:var(--amber); font-family:var(--font-mono); }
+
+.empty-state {
+  text-align:center; padding:60px 20px;
+  color:var(--text2); font-size:13px;
+}
+.empty-state .es-icon { font-size:40px; margin-bottom:12px; opacity:0.5; }
+.empty-state .es-title { font-size:14px; font-weight:600; color:var(--text1); margin-bottom:6px; }
+
+/* ── PILL / BADGE ─────────────────────────────── */
+.pill {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:2px 8px; border-radius:10px;
+  font-size:10px; font-weight:600; font-family:var(--font-mono);
+  letter-spacing:0.05em;
+}
+.pill-teal  { background:var(--teal-glow);  color:var(--teal);  border:1px solid rgba(0,212,177,0.3); }
+.pill-amber { background:var(--amber-glow); color:var(--amber); border:1px solid rgba(255,123,41,0.3); }
+.pill-red   { background:var(--red-glow);   color:var(--red);   border:1px solid rgba(255,59,92,0.3); }
+.pill-green { background:var(--green-glow); color:var(--green); border:1px solid rgba(0,217,126,0.3); }
+.pill-blue  { background:var(--blue-glow);  color:var(--blue);  border:1px solid rgba(61,155,255,0.3); }
+.pill-dim   { background:rgba(74,90,112,0.15); color:var(--text2); border:1px solid var(--border); }
+
+/* ── REMARK PILLS ─────────────────────────────── */
+/* Specific wider pills for the Remark column */
+.remark-pill {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:3px 10px; border-radius:10px;
+  font-size:10px; font-weight:600; font-family:var(--font-mono);
+  letter-spacing:0.04em; white-space:nowrap;
+}
+.remark-new-high {
+  background: rgba(0,217,126,0.1);
+  color: var(--green);
+  border: 1px solid rgba(0,217,126,0.35);
+}
+.remark-below {
+  background: rgba(255,59,92,0.1);
+  color: var(--red);
+  border: 1px solid rgba(255,59,92,0.35);
+}
+.remark-unverified {
+  background: rgba(74,90,112,0.12);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+.remark-disabled {
+  background: transparent;
+  color: var(--text3);
+  border: 1px solid var(--text3);
+  opacity: 0.6;
+}
+
+/* ── SCAN TERMINAL ─────────────────────────────── */
+#scan-overlay {
+  display:none; position:fixed; inset:0; z-index:1000;
+  background:rgba(3,9,18,0.92); backdrop-filter:blur(4px);
+  flex-direction:column; align-items:center; justify-content:center;
+}
+#scan-overlay.visible { display:flex; }
+.terminal {
+  width:min(760px,92vw);
+  background:var(--bg1);
+  border:1px solid var(--teal-dim);
+  border-radius:var(--r);
+  box-shadow: 0 0 60px rgba(0,212,177,0.12), 0 32px 80px rgba(0,0,0,0.6);
+  overflow:hidden;
+}
+.terminal-header {
+  display:flex; align-items:center; gap:10px;
+  padding:12px 16px;
+  background:var(--bg2);
+  border-bottom:1px solid var(--border);
+}
+.terminal-dots { display:flex; gap:6px; }
+.terminal-dot {
+  width:12px; height:12px; border-radius:50%;
+}
+.terminal-dot:nth-child(1) { background:#ff5f57; }
+.terminal-dot:nth-child(2) { background:#febc2e; }
+.terminal-dot:nth-child(3) { background:#28c840; }
+.terminal-title {
+  font-family:var(--font-mono); font-size:12px; color:var(--text2);
+  margin-left:4px;
+}
+.terminal-close {
+  margin-left:auto; background:none; border:none;
+  color:var(--text2); cursor:pointer; font-size:16px; line-height:1;
+  padding:2px 6px; border-radius:3px;
+  transition:color .15s;
+}
+.terminal-close:hover { color:var(--text0); }
+
+.progress-bar-wrap {
+  height:3px; background:var(--bg3); position:relative; overflow:hidden;
+}
+.progress-bar-fill {
+  height:100%; background:linear-gradient(90deg, var(--teal), var(--blue));
+  transition:width .4s ease;
+  box-shadow: 0 0 10px var(--teal);
+  position:relative;
+}
+.progress-bar-fill::after {
+  content:''; position:absolute; right:0; top:0; bottom:0;
+  width:40px;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,0.4));
+  animation: shimmer 1s linear infinite;
+}
+@keyframes shimmer { from{opacity:1} to{opacity:0} }
+
+.progress-info {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 16px;
+  font-family:var(--font-mono); font-size:11px; color:var(--text2);
+  background:var(--bg2); border-bottom:1px solid var(--border);
+}
+.progress-ticker { color:var(--teal); font-weight:500; }
+.progress-pct { color:var(--text1); }
+
+.log-body {
+  height:320px; overflow-y:auto; padding:10px 0;
+  font-family:var(--font-mono); font-size:11px; line-height:1.7;
+}
+.log-line {
+  padding:1px 16px; display:flex; gap:10px; align-items:baseline;
+}
+.log-time { color:var(--text3); flex-shrink:0; font-size:10px; }
+.log-msg { flex:1; }
+.log-line.info   .log-msg { color:var(--text1); }
+.log-line.pass   .log-msg { color:var(--green); }
+.log-line.fail   .log-msg { color:var(--text2); }
+.log-line.signal .log-msg { color:var(--amber); font-weight:600; }
+/* ── NEW: warn level — amber-ish for "included with remark" messages */
+.log-line.warn   .log-msg { color:#ffb347; font-style:italic; }
+
+.terminal-footer {
+  padding:12px 16px;
+  background:var(--bg2); border-top:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+}
+#scan-status-text {
+  font-family:var(--font-mono); font-size:12px; color:var(--text1);
+}
+#scan-found-count {
+  font-family:var(--font-mono); font-size:12px; color:var(--teal); font-weight:600;
+}
+
+/* ── DETAIL MODAL ─────────────────────────────── */
+#detail-modal {
+  display:none; position:fixed; inset:0; z-index:500;
+  background:rgba(3,9,18,0.85); backdrop-filter:blur(4px);
+  align-items:center; justify-content:center;
+}
+#detail-modal.visible { display:flex; }
+.modal-box {
+  width:min(900px,94vw); max-height:90vh;
+  background:var(--bg1); border:1px solid var(--border-hi);
+  border-radius:var(--r);
+  box-shadow: 0 32px 80px rgba(0,0,0,0.7);
+  display:flex; flex-direction:column;
+  overflow:hidden;
+}
+.modal-header {
+  display:flex; align-items:center; gap:12px;
+  padding:16px 20px;
+  background:var(--bg2); border-bottom:1px solid var(--border);
+}
+.modal-ticker {
+  font-family:var(--font-mono); font-size:20px; font-weight:600;
+  color:var(--teal);
+}
+.modal-sub { font-size:12px; color:var(--text2); margin-left:2px; }
+.modal-close {
+  margin-left:auto; background:none; border:none;
+  color:var(--text2); cursor:pointer; font-size:22px;
+  line-height:1; padding:2px 6px; border-radius:3px;
+  transition:color .15s;
+}
+.modal-close:hover { color:var(--text0); }
+.modal-body {
+  display:grid; grid-template-columns:1fr 260px;
+  flex:1; overflow:hidden;
+}
+.modal-chart { padding:16px; border-right:1px solid var(--border); min-height:340px; }
+.modal-stats {
+  padding:16px; overflow-y:auto;
+  display:flex; flex-direction:column; gap:4px;
+}
+.stat-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:7px 10px; border-radius:var(--r-sm);
+  transition:background .1s;
+}
+.stat-row:hover { background:var(--bg2); }
+.stat-label { font-size:11px; color:var(--text2); }
+.stat-value { font-family:var(--font-mono); font-size:12px; font-weight:500; color:var(--text1); }
+.stat-value.teal { color:var(--teal); }
+.stat-value.green { color:var(--green); }
+.stat-value.red { color:var(--red); }
+.stat-value.amber { color:var(--amber); }
+.stat-sep { height:1px; background:var(--border); margin:4px 0; }
+.sell-zone-box {
+  margin:8px 0; padding:10px 12px;
+  background:var(--amber-glow); border:1px solid rgba(255,123,41,0.3);
+  border-radius:var(--r-sm); font-size:11px;
+}
+.sell-zone-box .szlabel { color:var(--amber); font-weight:600; margin-bottom:4px; font-size:10px; text-transform:uppercase; letter-spacing:0.1em; }
+.sell-zone-box .szrange { font-family:var(--font-mono); color:var(--text0); font-size:12px; }
+
+/* Gate status pills */
+.gate-pill {
+  display:inline-block; font-size:10px; font-family:var(--font-mono);
+  font-weight:600; padding:2px 7px; border-radius:10px;
+  letter-spacing:0.03em; white-space:nowrap;
+}
+.gate-ok   { background:rgba(0,200,130,0.15); color:#00c882; border:1px solid rgba(0,200,130,0.3); }
+.gate-wait { background:rgba(255,179,0,0.12);  color:var(--amber); border:1px solid rgba(255,179,0,0.25); }
+
+/* ── REMARK BOX (modal) ───────────────────────── */
+.remark-box {
+  margin:4px 0 8px; padding:9px 12px;
+  border-radius:var(--r-sm); font-size:11px;
+  display:flex; align-items:center; gap:8px;
+}
+.remark-box.new-high {
+  background: rgba(0,217,126,0.07);
+  border: 1px solid rgba(0,217,126,0.25);
+}
+.remark-box.below {
+  background: rgba(255,59,92,0.07);
+  border: 1px solid rgba(255,59,92,0.25);
+}
+.remark-box.unverified {
+  background: rgba(74,90,112,0.1);
+  border: 1px solid var(--border);
+}
+.remark-box .rk-icon { font-size:14px; flex-shrink:0; }
+.remark-box .rk-text { font-family:var(--font-mono); font-size:11px; font-weight:600; }
+.remark-box.new-high   .rk-text { color:var(--green); }
+.remark-box.below      .rk-text { color:var(--red); }
+.remark-box.unverified .rk-text { color:var(--text2); }
+
+/* ── SETTINGS ────────────────────────────────── */
+.settings-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+  gap:16px;
+}
+.settings-card {
+  background:var(--bg1); border:1px solid var(--border);
+  border-radius:var(--r); padding:20px; display:flex; flex-direction:column; gap:14px;
+}
+.settings-card-title {
+  font-size:11px; font-weight:700; letter-spacing:0.1em;
+  color:var(--text2); text-transform:uppercase; margin-bottom:2px;
+  display:flex; align-items:center; gap:8px;
+}
+.settings-card-title::before {
+  content:''; width:3px; height:14px;
+  background:var(--teal); border-radius:2px;
+}
+.field { display:flex; flex-direction:column; gap:5px; }
+.field label { font-size:11px; color:var(--text2); letter-spacing:0.04em; }
+.field input[type=number],
+.field input[type=text],
+.field input[type=password] {
+  background:var(--bg2); border:1px solid var(--border);
+  color:var(--text0); font-family:var(--font-mono); font-size:13px;
+  padding:8px 12px; border-radius:var(--r-sm); outline:none; width:100%;
+  transition:border-color .15s, box-shadow .15s;
+}
+.field input:focus {
+  border-color:var(--teal-dim);
+  box-shadow: 0 0 0 2px var(--teal-glow);
+}
+.toggle-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 0;
+}
+.toggle-label { font-size:12px; color:var(--text1); }
+.toggle {
+  position:relative; width:42px; height:22px; cursor:pointer;
+}
+.toggle input { opacity:0; width:0; height:0; position:absolute; }
+.toggle-track {
+  position:absolute; inset:0; border-radius:11px;
+  background:var(--bg4); transition:.2s;
+  border:1px solid var(--border);
+}
+.toggle input:checked + .toggle-track {
+  background:var(--teal-glow);
+  border-color:var(--teal-dim);
+}
+.toggle-thumb {
+  position:absolute; top:3px; left:3px;
+  width:14px; height:14px; border-radius:50%;
+  background:var(--text2); transition:transform .2s, background .2s;
+}
+.toggle input:checked ~ .toggle-thumb {
+  transform:translateX(20px);
+  background:var(--teal);
+  box-shadow:0 0 8px var(--teal);
+}
+.settings-save {
+  grid-column:1/-1; display:flex; justify-content:flex-end; gap:10px;
+  margin-top:4px;
+}
+.file-upload-area {
+  border:1px dashed var(--border-hi); border-radius:var(--r);
+  padding:20px; text-align:center; cursor:pointer;
+  transition:background .15s, border-color .15s;
+}
+.file-upload-area:hover {
+  background:var(--bg2); border-color:var(--teal-dim);
+}
+.file-upload-area input { display:none; }
+.file-upload-area .upload-icon { font-size:28px; margin-bottom:6px; opacity:0.6; }
+.file-upload-area .upload-text { font-size:12px; color:var(--text2); }
+.file-upload-area .upload-sub  { font-size:11px; color:var(--text3); margin-top:2px; }
+
+/* ── CHARTS TAB ────────────────────────────────── */
+.charts-top {
+  display:flex; align-items:center; gap:12px;
+  padding:12px 20px; border-bottom:1px solid var(--border);
+  background:var(--bg1);
+}
+.charts-select {
+  background:var(--bg2); border:1px solid var(--border);
+  color:var(--text0); font-family:var(--font-mono); font-size:12px;
+  padding:7px 12px; border-radius:var(--r-sm); outline:none;
+  cursor:pointer;
+  appearance:none; -webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234d6b8a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  padding-right:32px;
+  min-width:160px;
+}
+.charts-select:focus {
+  border-color:var(--teal-dim);
+  box-shadow:0 0 0 2px var(--teal-glow);
+}
+.chart-container { padding:20px; }
+.summary-chart-container { padding:0 20px 20px; }
+
+/* ── SCAN LOG ─────────────────────────────────── */
+.scan-log-stats {
+  display:flex; gap:16px; margin-bottom:16px;
+}
+.log-stat-card {
+  flex:1; background:var(--bg1); border:1px solid var(--border);
+  border-radius:var(--r); padding:14px 18px;
+}
+.log-stat-num {
+  font-family:var(--font-mono); font-size:24px; font-weight:600;
+  color:var(--teal);
+}
+.log-stat-label { font-size:11px; color:var(--text2); margin-top:3px; }
+
+/* ── TOAST ────────────────────────────────────── */
+#toast-container {
+  position:fixed; top:70px; right:20px; z-index:2000;
+  display:flex; flex-direction:column; gap:8px;
+  pointer-events:none;
+}
+.toast {
+  display:flex; align-items:flex-start; gap:10px;
+  padding:12px 16px; border-radius:var(--r);
+  min-width:280px; max-width:380px;
+  background:var(--bg2); border:1px solid var(--border);
+  box-shadow:0 8px 32px rgba(0,0,0,0.5);
+  animation:slideIn .25s ease;
+  pointer-events:all;
+}
+@keyframes slideIn {
+  from { transform:translateX(20px); opacity:0; }
+  to   { transform:translateX(0);    opacity:1; }
+}
+.toast.fade-out {
+  animation:slideOut .3s ease forwards;
+}
+@keyframes slideOut {
+  to { transform:translateX(20px); opacity:0; }
+}
+.toast-icon { font-size:16px; flex-shrink:0; margin-top:1px; }
+.toast-body { flex:1; }
+.toast-title { font-size:12px; font-weight:600; color:var(--text0); margin-bottom:2px; }
+.toast-msg   { font-size:11px; color:var(--text2); line-height:1.4; }
+.toast.success { border-color:rgba(0,217,126,0.35); background:rgba(0,217,126,0.06); }
+.toast.error   { border-color:rgba(255,59,92,0.35);  background:rgba(255,59,92,0.06);  }
+.toast.warn    { border-color:rgba(255,123,41,0.35); background:rgba(255,123,41,0.06); }
+.toast.info    { border-color:rgba(61,155,255,0.35); background:rgba(61,155,255,0.06); }
+
+/* ── MISC ─────────────────────────────────────── */
+.section-title {
+  font-size:11px; font-weight:700; letter-spacing:0.1em;
+  color:var(--text2); text-transform:uppercase; margin-bottom:12px;
+  display:flex; align-items:center; gap:8px;
+}
+.section-title::before {
+  content:''; display:inline-block;
+  width:3px; height:12px; background:var(--teal); border-radius:2px;
+}
+.divider { height:1px; background:var(--border); margin:16px 0; }
+.count-tag {
+  font-family:var(--font-mono); font-size:10px;
+  color:var(--text2); margin-left:auto;
+}
+.nse-calls-badge {
+  font-family:var(--font-mono); font-size:10px;
+  padding:2px 8px; background:var(--blue-glow);
+  color:var(--blue); border-radius:10px; border:1px solid rgba(61,155,255,0.3);
+}
+.row-actions { display:flex; gap:4px; align-items:center; }
+@media (max-width:768px) {
+  .modal-body { grid-template-columns:1fr; }
+  .modal-chart { border-right:none; border-bottom:1px solid var(--border); }
+  .settings-grid { grid-template-columns:1fr; }
+  header { overflow-x:auto; }
+  .hstat { display:none; }
+}
+
+/* ── EXTERNAL TOOL NAV LINKS ─────────────────────────── */
+.nav-ext-divider {
+  width:1px; background:var(--border);
+  margin: 8px 4px; height:28px; flex-shrink:0;
+}
+.nav-ext-link {
+  display:inline-flex; align-items:center; gap:6px;
+  padding: 0 14px; height:44px;
+  font-size:10px; font-weight:700; letter-spacing:0.06em;
+  color:var(--text2); text-decoration:none;
+  white-space:nowrap; position:relative;
+  text-transform:uppercase;
+  border-left: none;
+  transition: color .15s, background .15s;
+  border-radius: 0;
+}
+.nav-ext-link:hover {
+  color:var(--teal);
+  background: rgba(0,212,177,0.06);
+}
+.nav-ext-icon { font-size:13px; }
+.nav-ext-badge {
+  font-size:9px; font-weight:800;
+  color:var(--teal-dim);
+  background: var(--teal-glow);
+  border: 1px solid rgba(0,212,177,0.25);
+  border-radius: 4px;
+  padding: 1px 4px;
+  letter-spacing: 0;
+  margin-left:2px;
+  transition: background .15s, color .15s;
+}
+.nav-ext-link:hover .nav-ext-badge {
+  background: rgba(0,212,177,0.2);
+  color:var(--teal);
+}
+.app-frame-wrap {
+  display:flex; flex-direction:column; flex:1; overflow:hidden;
+  background:var(--bg0);
+}
+.app-frame-bar {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 20px;
+  background:var(--bg1); border-bottom:1px solid var(--border);
+  font-size:11px; color:var(--text2); font-family:var(--font-mono);
+}
+.app-frame-url {
+  background:var(--bg2); border:1px solid var(--border);
+  color:var(--teal); font-family:var(--font-mono); font-size:11px;
+  padding:4px 10px; border-radius:var(--r-sm);
+  flex:1; max-width:360px; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; cursor:default;
+}
+.app-frame-status {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:3px 10px; border-radius:10px; font-size:10px; font-weight:600;
+  background:var(--green-glow); color:var(--green);
+  border:1px solid rgba(0,217,126,0.3);
+}
+.app-frame-status .dot {
+  width:6px; height:6px; border-radius:50%; background:var(--green);
+  animation:pulse 1.6s ease-in-out infinite;
+}
+.app-frame-open {
+  margin-left:auto;
+}
+.embedded-frame {
+  flex:1; border:none; width:100%; height:100%;
+  background:var(--bg0);
+}
+.app-frame-loading {
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  flex:1; gap:14px;
+  color:var(--text2); font-family:var(--font-mono); font-size:13px;
+}
+.app-frame-loading .spinner {
+  width:36px; height:36px; border-radius:50%;
+  border:3px solid var(--bg4); border-top-color:var(--teal);
+  animation:spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ── PREMIUM SELL ZONE ─────────────────────────────── */
+.pz-score-bar {
+  display:flex; align-items:center; gap:6px;
+}
+.pz-score-bar .bar {
+  flex:1; height:6px; border-radius:3px;
+  background:var(--bg4); overflow:hidden; min-width:40px;
+}
+.pz-score-bar .bar-fill {
+  height:100%; border-radius:3px;
+  background:linear-gradient(90deg, var(--teal), var(--amber));
+  transition:width .3s;
+}
+.pz-score-num {
+  font-family:var(--font-mono); font-size:11px; font-weight:600;
+  color:var(--amber); min-width:36px; text-align:right;
+}
+.pz-ladder {
+  display:flex; gap:4px; flex-wrap:nowrap;
+}
+.pz-ladder-cell {
+  display:flex; flex-direction:column; align-items:center;
+  background:var(--bg3); border:1px solid var(--border);
+  border-radius:var(--r-sm); padding:3px 8px;
+  min-width:56px;
+}
+.pz-ladder-cell.atm {
+  border-color:var(--teal-dim); background:rgba(0,212,177,0.07);
+}
+.pz-ladder-cell.vol-surge {
+  border-color:rgba(255,123,41,0.4); background:rgba(255,123,41,0.06);
+}
+.pz-cell-label { font-size:9px; color:var(--text3); font-family:var(--font-mono); text-transform:uppercase; }
+.pz-cell-strike { font-size:9px; color:var(--text2); font-family:var(--font-mono); }
+.pz-cell-ltp { font-size:12px; font-weight:600; font-family:var(--font-mono); color:var(--teal); }
+.pz-cell-ltp.atm { color:var(--amber); }
+.pz-cell-oi { font-size:9px; color:var(--text3); font-family:var(--font-mono); }
+.vol-surge-badge {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:2px 7px; border-radius:10px;
+  font-size:10px; font-weight:700; font-family:var(--font-mono);
+  background:rgba(255,123,41,0.15); color:var(--amber);
+  border:1px solid rgba(255,123,41,0.35);
+}
+.pz-rank {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:22px; height:22px; border-radius:50%;
+  font-size:11px; font-weight:700; font-family:var(--font-mono);
+  background:var(--bg3); color:var(--text2);
+  border:1px solid var(--border);
+}
+.pz-rank.top { background:rgba(255,123,41,0.15); color:var(--amber); border-color:rgba(255,123,41,0.35); }
+.pz-summary-cards {
+  display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap;
+}
+.pz-summary-card {
+  background:var(--bg1); border:1px solid var(--border);
+  border-radius:var(--r); padding:12px 18px;
+  display:flex; flex-direction:column; gap:2px;
+  min-width:130px;
+}
+.pz-summary-card-val {
+  font-family:var(--font-mono); font-size:20px; font-weight:700;
+  color:var(--teal);
+}
+.pz-summary-card-lbl {
+  font-size:10px; color:var(--text2); text-transform:uppercase;
+  letter-spacing:0.08em;
+}
+.pz-scan-hint {
+  background:rgba(0,212,177,0.04); border:1px solid var(--teal-dim);
+  border-radius:var(--r); padding:10px 16px;
+  font-size:11px; color:var(--text2); margin-bottom:14px;
+  font-family:var(--font-mono); line-height:1.7;
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ─── HEADER ─────────────────────────────────── -->
+<header>
+  <div class="header-logo">
+    <div class="logo-icon">▼</div>
+    <div>
+      <div class="header-title">MomentumLoss</div>
+      <div class="header-sub">NSE Tools Suite v4</div>
+    </div>
+  </div>
+
+  <div class="header-stats">
+    <div class="hstat">
+      <span class="hstat-label">Active Signals</span>
+      <span class="hstat-value teal" id="hs-signals">—</span>
+    </div>
+    <div class="hstat">
+      <span class="hstat-label">Sell Alerts</span>
+      <span class="hstat-value amber" id="hs-alerts">—</span>
+    </div>
+    <div class="hstat">
+      <span class="hstat-label">Auto-Scan</span>
+      <span class="hstat-value" id="hs-autoscan">—</span>
+    </div>
+    <div class="hstat">
+      <span class="hstat-label">Last Scan</span>
+      <span class="hstat-value" id="hs-last" style="font-size:11px">—</span>
+    </div>
+  </div>
+
+  <div class="market-badge closed" id="market-badge">
+    <span class="dot"></span>
+    <span id="market-label">MARKET CLOSED</span>
+  </div>
+  <div class="header-clock" id="header-clock">00:00:00</div>
+</header>
+
+<!-- ─── NAV TABS ───────────────────────────────── -->
+<nav>
+  <button class="nav-tab active" data-tab="signals">
+    📉 Signals <span class="tab-badge" id="badge-signals">0</span>
+  </button>
+  <button class="nav-tab" data-tab="alerts">
+    🔔 Sell Alerts <span class="tab-badge" id="badge-alerts">0</span>
+  </button>
+  <button class="nav-tab" data-tab="charts">
+    📊 Charts
+  </button>
+  <button class="nav-tab" data-tab="settings">
+    ⚙️ Settings
+  </button>
+  <button class="nav-tab" data-tab="logs">
+    🕒 Scan Log <span class="tab-badge" id="badge-logs">0</span>
+  </button>
+  <button class="nav-tab" data-tab="premium">
+    💎 Prem Zone <span class="tab-badge" id="badge-premium">0</span>
+  </button>
+  <div style="flex:1"></div>
+
+  <!-- ── External tool links ─────────────────────── -->
+  <div class="nav-ext-divider"></div>
+  <a class="nav-ext-link" href="/option-charts" target="_blank" rel="noopener">
+    <span class="nav-ext-icon">📈</span>
+    Option Charts
+    <span class="nav-ext-badge">↗</span>
+  </a>
+  <a class="nav-ext-link" href="/sma-screener" target="_blank" rel="noopener">
+    <span class="nav-ext-icon">📊</span>
+    SMA Screener
+    <span class="nav-ext-badge">↗</span>
+  </a>
+  <a class="nav-ext-link" href="/backtest" target="_blank" rel="noopener">
+    <span class="nav-ext-icon">📈</span>
+    Backtest
+    <span class="nav-ext-badge">↗</span>
+  </a>
+  <a class="nav-ext-link" href="/backtest-dashboard" target="_blank" rel="noopener">
+    <span class="nav-ext-icon">⚡</span>
+    Backtest Analytics
+    <span class="nav-ext-badge">↗</span>
+  </a>
+</nav>
+
+<!-- ─── MAIN ────────────────────────────────────── -->
+<main>
+
+  <!-- ╔═ SIGNALS TAB ═════════════════════════════╗ -->
+  <div class="tab-panel active" id="tab-signals">
+    <div class="action-bar">
+      <button class="btn btn-primary" id="btn-screen-all">
+        <span>⟳</span> Screen All Tickers
+      </button>
+      <div class="specific-row">
+        <input class="specific-input" id="specific-input"
+               placeholder="HDFCBANK, RELIANCE, TCS …"/>
+        <button class="btn btn-outline" id="btn-screen-specific">
+          🎯 Screen
+        </button>
+      </div>
+      <button class="btn btn-amber" id="btn-check-prox">
+        🔔 Check Sell Zone
+      </button>
+      <button class="btn btn-danger btn-sm" id="btn-clear" style="margin-left:auto">
+        🗑 Clear All
+      </button>
+    </div>
+    <div class="panel-body">
+      <div class="section-title">
+        Active Signals
+        <span class="count-tag" id="signals-count">0 stocks</span>
+        <span id="nse-calls-indicator"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="signals-table">
+          <thead>
+            <tr>
+              <th data-col="Ticker">Ticker <span class="sort-arrow">↕</span></th>
+              <th data-col="Today_Close">Close <span class="sort-arrow">↕</span></th>
+              <th data-col="Yesterday_Low">Prev Low <span class="sort-arrow">↕</span></th>
+              <th data-col="Drop_Pct">Drop% <span class="sort-arrow">↕</span></th>
+              <th data-col="Surge_Gain_Pct">Surge% <span class="sort-arrow">↕</span></th>
+              <th data-col="Surge_Candles">Candles <span class="sort-arrow">↕</span></th>
+              <th data-col="Suggested_Strike">Strike <span class="sort-arrow">↕</span></th>
+              <th data-col="CE_LTP">CE LTP <span class="sort-arrow">↕</span></th>
+              <th data-col="Remark">CE Signal <span class="sort-arrow">↕</span></th>
+              <th>Gate 2</th>
+              <th data-col="Expiry">Expiry <span class="sort-arrow">↕</span></th>
+              <th>Scanned</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="signals-tbody">
+            <tr><td colspan="12">
+              <div class="empty-state">
+                <div class="es-icon">📉</div>
+                <div class="es-title">No signals yet</div>
+                <div>Click <strong>Screen All Tickers</strong> or wait for auto-scan</div>
+              </div>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ╔═ ALERTS TAB ═══════════════════════════════╗ -->
+  <div class="tab-panel" id="tab-alerts">
+    <div class="panel-body">
+      <div class="section-title">
+        Sell Zone Alerts
+        <span class="count-tag" id="alerts-count">0 hits</span>
+      </div>
+      <div class="table-wrap">
+        <table id="alerts-table">
+          <thead>
+            <tr>
+              <th>Alert Time</th>
+              <th>Ticker</th>
+              <th>Current Price</th>
+              <th>Surge High</th>
+              <th>Dist from High</th>
+              <th>G2 Date</th>
+              <th>CE LTP (init)</th>
+              <th>CE Signal</th>
+              <th>Surge%</th>
+              <th>Expiry</th>
+            </tr>
+          </thead>
+          <tbody id="alerts-tbody">
+            <tr><td colspan="9">
+              <div class="empty-state">
+                <div class="es-icon">🔔</div>
+                <div class="es-title">No sell zone alerts</div>
+                <div>Alerts fire when stock price approaches the suggested CE strike</div>
+              </div>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ╔═ CHARTS TAB ═══════════════════════════════╗ -->
+  <div class="tab-panel" id="tab-charts">
+    <div class="charts-top">
+      <span style="font-size:12px;color:var(--text2)">Select ticker:</span>
+      <select class="charts-select" id="chart-ticker-select">
+        <option value="">— Choose a signal —</option>
+      </select>
+      <button class="btn btn-outline btn-sm" id="btn-load-chart">Load Chart</button>
+    </div>
+    <div class="panel-body">
+      <div class="chart-container">
+        <div id="main-chart" style="height:380px;"></div>
+      </div>
+      <div class="divider"></div>
+      <div class="section-title">Surge vs Drop — All Signals</div>
+      <div class="summary-chart-container">
+        <div id="summary-chart" style="height:260px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ╔═ SETTINGS TAB ═════════════════════════════╗ -->
+  <div class="tab-panel" id="tab-settings">
+    <div class="panel-body">
+      <div class="settings-grid" id="settings-grid">
+        <!-- filled by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ╔═ LOGS TAB ══════════════════════════════════╗ -->
+  <div class="tab-panel" id="tab-logs">
+    <div class="panel-body">
+      <div class="scan-log-stats" id="log-stats-row">
+        <div class="log-stat-card">
+          <div class="log-stat-num" id="ls-total">0</div>
+          <div class="log-stat-label">Total Scans</div>
+        </div>
+        <div class="log-stat-card">
+          <div class="log-stat-num" id="ls-tickers">0</div>
+          <div class="log-stat-label">Tickers Scanned</div>
+        </div>
+        <div class="log-stat-card">
+          <div class="log-stat-num" id="ls-signals">0</div>
+          <div class="log-stat-label">Signals Found</div>
+        </div>
+        <div class="log-stat-card">
+          <div class="log-stat-num" id="ls-nse">0</div>
+          <div class="log-stat-label">NSE API Calls</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="log-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Tickers Scanned</th>
+              <th>Signals Found</th>
+              <th>NSE Calls</th>
+            </tr>
+          </thead>
+          <tbody id="log-tbody">
+            <tr><td colspan="4">
+              <div class="empty-state">
+                <div class="es-icon">🕒</div>
+                <div class="es-title">No scan history</div>
+              </div>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ╔═ PREMIUM SELL ZONE TAB ════════════════════════╗ -->
+  <div class="tab-panel" id="tab-premium">
+    <div class="action-bar">
+      <button class="btn btn-primary" id="btn-pz-scan">
+        💎 Scan Premium Zone
+      </button>
+      <button class="btn btn-outline btn-sm" id="btn-pz-refresh">
+        ↺ Refresh
+      </button>
+      <button class="btn btn-danger btn-sm" id="btn-pz-clear" style="margin-left:auto">
+        🗑 Clear
+      </button>
+    </div>
+    <div class="panel-body">
+      <div class="pz-scan-hint">
+        💡 <strong>Premium Sell Zone</strong> — filters Gate-2-confirmed signals already in proximity range
+        where <strong>today's HIGH tested resistance</strong> AND <strong>volume ≥ threshold</strong>.
+        Low-vol days (like red candles with 0.2–0.8x vol) are excluded — CE premiums are stale without conviction volume.
+        Ranked by <strong>vol surge × ATM premium</strong>: higher score = more premium available to collect.
+        Requires at least one signal with Gate 2 confirmed and price in proximity.
+      </div>
+      <div class="pz-summary-cards">
+        <div class="pz-summary-card">
+          <div class="pz-summary-card-val" id="pz-stat-candidates">—</div>
+          <div class="pz-summary-card-lbl">Candidates</div>
+        </div>
+        <div class="pz-summary-card">
+          <div class="pz-summary-card-val" id="pz-stat-vol-surge" style="color:var(--amber)">—</div>
+          <div class="pz-summary-card-lbl">All Vol-Confirmed ✓</div>
+        </div>
+        <div class="pz-summary-card">
+          <div class="pz-summary-card-val" id="pz-stat-top-score" style="color:var(--green)">—</div>
+          <div class="pz-summary-card-lbl">Top Premium Score</div>
+        </div>
+        <div class="pz-summary-card">
+          <div class="pz-summary-card-val" id="pz-stat-scanned-at" style="color:var(--text2);font-size:12px">—</div>
+          <div class="pz-summary-card-lbl">Last Scanned</div>
+        </div>
+      </div>
+      <div class="section-title">
+        Premium Opportunities — Ranked by Score
+        <span class="count-tag" id="pz-count">0 stocks</span>
+      </div>
+      <div class="table-wrap">
+        <table id="pz-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Ticker</th>
+              <th>Price</th>
+              <th>Resistance</th>
+              <th>Dist%</th>
+              <th>Today High</th>
+              <th>Vol Surge</th>
+              <th style="border-left:1px solid var(--border-hi)">ATM CE</th>
+              <th>+1 OTM CE</th>
+              <th>+2 OTM CE</th>
+              <th>+3 OTM CE</th>
+              <th>Sell Strike</th>
+              <th>G2 Date</th>
+              <th>Surge%</th>
+              <th>Score ↓</th>
+            </tr>
+          </thead>
+          <tbody id="pz-tbody">
+            <tr><td colspan="15">
+              <div class="empty-state">
+                <div class="es-icon">💎</div>
+                <div class="es-title">No premium zone data</div>
+                <div>Click <strong>Scan Premium Zone</strong> — requires Gate-2-confirmed signals in proximity range<br>
+                <span style="color:var(--amber);font-size:11px">⚠ Stocks are excluded if today's volume &lt; threshold or High did not reach resistance zone</span></div>
+              </div>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<!-- ─── SCAN TERMINAL OVERLAY ───────────────────── -->
+<div id="scan-overlay">
+  <div class="terminal">
+    <div class="terminal-header">
+      <div class="terminal-dots">
+        <div class="terminal-dot"></div>
+        <div class="terminal-dot"></div>
+        <div class="terminal-dot"></div>
+      </div>
+      <span class="terminal-title">nse-screener — live scan</span>
+      <button class="terminal-close" id="terminal-close">✕</button>
+    </div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill" id="prog-bar" style="width:0%"></div>
+    </div>
+    <div class="progress-info">
+      <span>Scanning: <span class="progress-ticker" id="prog-ticker">—</span></span>
+      <span class="progress-pct" id="prog-pct">0 / 0</span>
+    </div>
+    <div class="log-body" id="terminal-log"></div>
+    <div class="terminal-footer">
+      <span id="scan-status-text">Initializing…</span>
+      <span id="scan-found-count">0 signals found</span>
+    </div>
+  </div>
+</div>
+
+<!-- ─── DETAIL MODAL ─────────────────────────────── -->
+<div id="detail-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-ticker" id="modal-ticker">—</span>
+      <span class="modal-sub" id="modal-sub">Momentum Loss Signal</span>
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-chart" id="modal-chart-container">
+        <div id="modal-chart" style="height:300px;"></div>
+      </div>
+      <div class="modal-stats" id="modal-stats"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TOASTS ───────────────────────────────────── -->
+<div id="toast-container"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONFIGURATION
+// ═══════════════════════════════════════════════════════
+const API = {
+  async get(path) {
+    const r = await fetch(path);
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
+  async post(path, body={}) {
+    const r = await fetch(path, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
+  async put(path, body={}) {
+    const r = await fetch(path, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
+  async del(path) {
+    const r = await fetch(path, { method:'DELETE' });
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
+};
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+const State = {
+  signals:  [],
+  alerts:   [],
+  logs:     [],
+  config:   {},
+  sortCol:  'Scanned_At',
+  sortDir:  -1,
+  currentJob: null,
+};
+
+// ═══════════════════════════════════════════════════════
+//  REMARK HELPERS
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Returns a <span> pill HTML for the Remark field.
+ * Handles both the old CE_Above_30d_High boolean/string and the new Remark string.
+ */
+function remarkPill(sig) {
+  const remark = sig.Remark || '';
+
+  // New Remark field takes precedence
+  if (remark.includes('CE at New High') || remark.includes('New High')) {
+    return `<span class="remark-pill remark-new-high">🟢 CE at New High</span>`;
+  }
+  if (remark.includes('Below')) {
+    return `<span class="remark-pill remark-below">🔴 CE Below 30d High</span>`;
+  }
+  if (remark.includes('disabled') || remark.includes('—')) {
+    return `<span class="remark-pill remark-disabled">— disabled</span>`;
+  }
+  if (remark.includes('Unverified') || remark.includes('⚪')) {
+    return `<span class="remark-pill remark-unverified">⚪ Unverified</span>`;
+  }
+
+  // Fallback: use legacy CE_Above_30d_High field for old saved signals
+  const v = sig.CE_Above_30d_High;
+  if (v === true)        return `<span class="remark-pill remark-new-high">🟢 CE at New High</span>`;
+  if (v === false)       return `<span class="remark-pill remark-below">🔴 CE Below 30d High</span>`;
+  return `<span class="remark-pill remark-unverified">⚪ Unverified</span>`;
+}
+
+/**
+ * Returns the modal remark-box HTML block.
+ */
+function remarkBox(sig) {
+  const remark = sig.Remark || '';
+  const v      = sig.CE_Above_30d_High;
+
+  const isNewHigh  = remark.includes('New High') || v === true;
+  const isBelow    = remark.includes('Below')    || v === false;
+  const isDisabled = remark.includes('disabled') || remark.includes('—');
+
+  if (isNewHigh) return `
+    <div class="remark-box new-high">
+      <span class="rk-icon">🟢</span>
+      <span class="rk-text">CE LTP is above 30-day historical high — strong signal</span>
+    </div>`;
+  if (isBelow) return `
+    <div class="remark-box below">
+      <span class="rk-icon">🔴</span>
+      <span class="rk-text">CE LTP ≤ 30d high — special case, trade with caution</span>
+    </div>`;
+  if (isDisabled) return `
+    <div class="remark-box unverified">
+      <span class="rk-icon">—</span>
+      <span class="rk-text">CE historical check is disabled in settings</span>
+    </div>`;
+  return `
+    <div class="remark-box unverified">
+      <span class="rk-icon">⚪</span>
+      <span class="rk-text">30d historical high could not be verified (NSE API)</span>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  TOASTS
+// ═══════════════════════════════════════════════════════
+function toast(type, title, msg='') {
+  const icons = { success:'✅', error:'❌', warn:'⚠️', info:'ℹ️' };
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `
+    <span class="toast-icon">${icons[type]||'•'}</span>
+    <div class="toast-body">
+      <div class="toast-title">${title}</div>
+      ${msg ? `<div class="toast-msg">${msg}</div>` : ''}
+    </div>`;
+  const container = document.getElementById('toast-container');
+  container.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('fade-out');
+    setTimeout(() => el.remove(), 350);
+  }, 3500);
+}
+
+// ═══════════════════════════════════════════════════════
+//  HEADER STATUS
+// ═══════════════════════════════════════════════════════
+async function refreshStatus() {
+  try {
+    const s = await API.get('/api/status');
+    document.getElementById('hs-signals').textContent = s.active_signals;
+    document.getElementById('hs-alerts').textContent  = s.proximity_alerts;
+    document.getElementById('hs-autoscan').textContent =
+      s.auto_scan ? `Every ${s.scan_interval}m` : 'Off';
+    document.getElementById('hs-last').textContent =
+      s.last_scan ? s.last_scan.split(' ')[1] : '—';
+
+    const badge = document.getElementById('market-badge');
+    const label = document.getElementById('market-label');
+    if (s.market_open) {
+      badge.className = 'market-badge open';
+      label.textContent = 'MARKET OPEN';
+    } else {
+      badge.className = 'market-badge closed';
+      label.textContent = 'MARKET CLOSED';
+    }
+  } catch(e) {}
+}
+
+function startClock() {
+  const el = document.getElementById('header-clock');
+  setInterval(() => {
+    const now = new Date();
+    const ist = new Date(now.toLocaleString('en-US',{timeZone:'Asia/Kolkata'}));
+    el.textContent = ist.toTimeString().slice(0,8);
+  }, 1000);
+}
+
+// ═══════════════════════════════════════════════════════
+//  SIGNALS TAB
+// ═══════════════════════════════════════════════════════
+async function loadSignals() {
+  try {
+    State.signals = await API.get('/api/signals');
+    renderSignals();
+    updateBadge('signals', State.signals.length);
+    updateChartSelect();
+    renderSummaryChart();
+  } catch(e) { toast('error','Failed to load signals'); }
+}
+
+function renderSignals() {
+  const tbody = document.getElementById('signals-tbody');
+  const sigs  = [...State.signals];
+  document.getElementById('signals-count').textContent = `${sigs.length} stocks`;
+
+  if (!sigs.length) {
+    tbody.innerHTML = `<tr><td colspan="13">
+      <div class="empty-state">
+        <div class="es-icon">📉</div>
+        <div class="es-title">No signals yet</div>
+        <div>Click <strong>Screen All Tickers</strong> or wait for auto-scan</div>
+      </div></td></tr>`;
+    return;
+  }
+
+  // Sort
+  sigs.sort((a,b) => {
+    const av = a[State.sortCol] ?? '';
+    const bv = b[State.sortCol] ?? '';
+    return typeof av === 'number'
+      ? (av - bv) * State.sortDir
+      : String(av).localeCompare(String(bv)) * State.sortDir;
+  });
+
+  tbody.innerHTML = sigs.map(s => {
+    const scanned  = s.Scanned_At ? s.Scanned_At.split(' ')[1] : '—';
+    const g2ok     = s.Sell_Zone_EMA_Confirmed;
+    const g2pill   = g2ok
+      ? `<span class="gate-pill gate-ok" title="EMA breach confirmed ${s.Sell_Zone_EMA_Confirm_Date||''}">G2 ✅</span>`
+      : `<span class="gate-pill gate-wait" title="Waiting: price must close below EMA with volume">G2 ⏳</span>`;
+    return `<tr data-ticker="${s.Ticker}">
+      <td class="ticker">${s.Ticker}</td>
+      <td class="mono">₹${fmt(s.Today_Close)}</td>
+      <td class="mono">₹${fmt(s.Yesterday_Low)}</td>
+      <td class="red mono">-${fmt(s.Drop_Pct)}%</td>
+      <td class="green mono">+${fmt(s.Surge_Gain_Pct)}%</td>
+      <td class="mono" style="color:var(--text1)">${s.Surge_Candles}</td>
+      <td class="amber mono">₹${s.Suggested_Strike?.toFixed(0)} CE</td>
+      <td class="teal mono">₹${fmt(s.CE_LTP)}</td>
+      <td>${remarkPill(s)}</td>
+      <td>${g2pill}</td>
+      <td class="mono" style="color:var(--text2);font-size:10px">${s.Expiry||'—'}</td>
+      <td class="mono" style="color:var(--text3);font-size:10px">${scanned}</td>
+      <td class="row-actions">
+        <button class="btn btn-outline btn-sm btn-icon" onclick="openDetail('${s.Ticker}',event)" title="View detail">⬡</button>
+        <button class="btn btn-danger btn-sm btn-icon" onclick="removeSignal('${s.Ticker}',event)" title="Remove">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Row click → detail
+  tbody.querySelectorAll('tr[data-ticker]').forEach(tr => {
+    tr.addEventListener('click', e => {
+      if (e.target.closest('button')) return;
+      openDetail(tr.dataset.ticker);
+    });
+  });
+}
+
+// Table sort
+document.querySelectorAll('#signals-table th[data-col]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (State.sortCol === col) State.sortDir *= -1;
+    else { State.sortCol = col; State.sortDir = -1; }
+    document.querySelectorAll('#signals-table th').forEach(t => t.classList.remove('sorted'));
+    th.classList.add('sorted');
+    th.querySelector('.sort-arrow').textContent = State.sortDir > 0 ? '↑' : '↓';
+    renderSignals();
+  });
+});
+
+async function removeSignal(ticker, e) {
+  if (e) e.stopPropagation();
+  try {
+    await API.del(`/api/signals/${ticker}`);
+    await loadSignals();
+    toast('success',`Removed ${ticker}`);
+  } catch(err) { toast('error','Failed to remove'); }
+}
+
+// ═══════════════════════════════════════════════════════
+//  ALERTS TAB
+// ═══════════════════════════════════════════════════════
+async function loadAlerts() {
+  try {
+    State.alerts = await API.get('/api/proximity');
+    renderAlerts();
+    updateBadge('alerts', State.alerts.length);
+  } catch(e) {}
+}
+
+function renderAlerts() {
+  const tbody = document.getElementById('alerts-tbody');
+  document.getElementById('alerts-count').textContent = `${State.alerts.length} hits`;
+
+  if (!State.alerts.length) {
+    tbody.innerHTML = `<tr><td colspan="10">
+      <div class="empty-state">
+        <div class="es-icon">🔔</div>
+        <div class="es-title">No sell zone alerts yet</div>
+        <div>Alerts fire only after Gate 2 (EMA+volume) is confirmed and price re-enters sell zone</div>
+      </div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = [...State.alerts].reverse().map(a => {
+    const alertTime  = a.Alert_Time ? a.Alert_Time.split(' ')[1] : '—';
+    const highVal    = a.Surge_High ?? a.Resistance_High ?? a.Yesterday_High ?? a.Suggested_Strike;
+    const distVal    = a.Distance_From_High_Pct ?? a.Distance_From_Strike_Pct;
+    const g2date     = a.Sell_Zone_EMA_Confirm_Date || '—';
+    return `<tr>
+      <td class="mono" style="color:var(--text2);font-size:10px">${alertTime}</td>
+      <td class="ticker">${a.Ticker}</td>
+      <td class="teal mono">₹${fmt(a.Current_Price)}</td>
+      <td class="amber mono">₹${fmt(highVal)}</td>
+      <td class="mono" style="color:var(--text1)">${fmt(distVal)}%</td>
+      <td class="mono" style="color:var(--teal);font-size:10px">${g2date}</td>
+      <td class="mono">₹${fmt(a.CE_LTP)}</td>
+      <td>${remarkPill(a)}</td>
+      <td class="green mono">+${fmt(a.Surge_Gain_Pct)}%</td>
+      <td class="mono" style="color:var(--text2);font-size:10px">${a.Expiry||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  CHARTS TAB
+// ═══════════════════════════════════════════════════════
+function updateChartSelect() {
+  const sel = document.getElementById('chart-ticker-select');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Choose a signal —</option>' +
+    State.signals.map(s => `<option value="${s.Ticker}">${s.Ticker} — ₹${s.Suggested_Strike?.toFixed(0)} CE</option>`).join('');
+  if (cur) sel.value = cur;
+}
+
+document.getElementById('btn-load-chart').addEventListener('click', async () => {
+  const ticker = document.getElementById('chart-ticker-select').value;
+  if (!ticker) { toast('warn','Select a ticker first'); return; }
+  await renderMainChart(ticker);
+});
+
+async function renderMainChart(ticker) {
+  const container = document.getElementById('main-chart');
+  container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:380px;color:var(--text2);font-family:var(--font-mono);font-size:12px">Loading chart…</div>`;
+  try {
+    const d    = await API.get(`/api/chart/${ticker}?days=60`);
+    const candles = d.candles;
+    const x0   = candles[0].date;
+    const x1   = candles.at(-1).date;
+    const prox = State.config.price_proximity_percent ?? 1.5;
+
+    const trace = {
+      type:'candlestick',
+      x:     candles.map(c=>c.date),
+      open:  candles.map(c=>c.open),
+      high:  candles.map(c=>c.high),
+      low:   candles.map(c=>c.low),
+      close: candles.map(c=>c.close),
+      name:  ticker,
+      increasing: { line:{color:'#00d97e'}, fillcolor:'rgba(0,217,126,0.2)' },
+      decreasing: { line:{color:'#ff3b5c'}, fillcolor:'rgba(255,59,92,0.2)'  },
+    };
+
+    const shapes      = [];
+    const annotations = [];
+
+    // Strike line (amber dotted)
+    if (d.strike) {
+      shapes.push({ type:'line', x0, x1, y0:d.strike, y1:d.strike,
+        line:{ color:'#ff7b29', width:1, dash:'dot' } });
+      annotations.push({
+        xref:'paper', x:0.02, y:d.strike, yref:'y',
+        text:`Strike ₹${d.strike?.toFixed(0)}`, showarrow:false,
+        font:{ color:'#ff7b29', size:10, family:"'JetBrains Mono',monospace" },
+        bgcolor:'rgba(255,123,41,0.15)', bordercolor:'rgba(255,123,41,0.5)',
+        borderwidth:1, borderpad:4,
+      });
+    }
+
+    // Surge window highlight (subtle green band)
+    if (d.surge_start && d.surge_end) {
+      shapes.push({
+        type:'rect', x0:d.surge_start, x1:d.surge_end, y0:0, y1:1,
+        xref:'x', yref:'paper',
+        fillcolor:'rgba(0,217,126,0.06)', line:{ width:0 },
+      });
+    }
+
+    // Resistance ceiling (yesterday_high) + sell zone floor band
+    if (d.yesterday_high) {
+      const szFloor = d.yesterday_high * (1 - prox / 100);
+      // Ceiling line
+      shapes.push({ type:'line', x0, x1, y0:d.yesterday_high, y1:d.yesterday_high,
+        line:{ color:'#00d4b1', width:1.5, dash:'solid' } });
+      // Floor line
+      shapes.push({ type:'line', x0, x1, y0:szFloor, y1:szFloor,
+        line:{ color:'#00d4b1', width:1, dash:'dash' } });
+      // Shaded band
+      shapes.push({
+        type:'rect', x0, x1, y0:szFloor, y1:d.yesterday_high,
+        fillcolor:'rgba(0,212,177,0.06)', line:{ width:0 },
+      });
+      annotations.push({
+        xref:'paper', x:0.98, y:d.yesterday_high, yref:'y',
+        text:`Resistance ₹${d.yesterday_high?.toFixed(2)}`, showarrow:false,
+        xanchor:'right',
+        font:{ color:'#00d4b1', size:10, family:"'JetBrains Mono',monospace" },
+        bgcolor:'rgba(0,212,177,0.12)', bordercolor:'rgba(0,212,177,0.45)',
+        borderwidth:1, borderpad:4,
+      });
+    }
+
+    const layout = {
+      paper_bgcolor:'#070f1c',
+      plot_bgcolor:'#070f1c',
+      font:{ family:"'JetBrains Mono', monospace", size:11, color:'#7a91b0' },
+      margin:{ l:60, r:20, t:30, b:40 },
+      xaxis:{
+        gridcolor:'#1a3150', zerolinecolor:'#1a3150',
+        rangeslider:{ visible:false },
+        tickfont:{ size:10 },
+      },
+      yaxis:{
+        gridcolor:'#1a3150', zerolinecolor:'#1a3150',
+        side:'right', tickfont:{ size:10 },
+        tickprefix:'₹',
+      },
+      shapes, annotations,
+      dragmode:'pan',
+    };
+
+    Plotly.react('main-chart', [trace], layout, {
+      responsive:true,
+      displayModeBar:false,
+      scrollZoom:true,
+    });
+  } catch(e) {
+    container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:380px;color:var(--red);font-size:12px">Failed to load chart for ${ticker}</div>`;
+  }
+}
+
+function renderSummaryChart() {
+  const sigs = State.signals;
+  if (!sigs.length) {
+    Plotly.purge('summary-chart');
+    return;
+  }
+  const layout = {
+    paper_bgcolor:'#070f1c',
+    plot_bgcolor:'#070f1c',
+    font:{ family:"'JetBrains Mono',monospace", size:10, color:'#7a91b0' },
+    margin:{ l:50, r:20, t:10, b:60 },
+    xaxis:{ gridcolor:'#1a3150', tickangle:-35 },
+    yaxis:{ gridcolor:'#1a3150', ticksuffix:'%' },
+    barmode:'group',
+    legend:{ font:{size:10}, bgcolor:'transparent' },
+    showlegend:true,
+  };
+  Plotly.react('summary-chart', [
+    {
+      type:'bar', name:'Surge Gain %',
+      x: sigs.map(s=>s.Ticker),
+      y: sigs.map(s=>s.Surge_Gain_Pct),
+      marker:{ color:'rgba(0,217,126,0.7)', line:{color:'#00d97e',width:1} },
+    },
+    {
+      type:'bar', name:'Drop % (vs Prev Low)',
+      x: sigs.map(s=>s.Ticker),
+      y: sigs.map(s=>s.Drop_Pct),
+      marker:{ color:'rgba(255,59,92,0.7)', line:{color:'#ff3b5c',width:1} },
+    },
+  ], layout, { responsive:true, displayModeBar:false });
+}
+
+// ═══════════════════════════════════════════════════════
+//  DETAIL MODAL
+// ═══════════════════════════════════════════════════════
+async function openDetail(ticker, event) {
+  if (event) event.stopPropagation();
+  const sig = State.signals.find(s => s.Ticker === ticker);
+  if (!sig) return;
+
+  document.getElementById('modal-ticker').textContent = ticker;
+  document.getElementById('modal-sub').textContent =
+    `Strike ₹${sig.Suggested_Strike?.toFixed(0)} CE — Expiry ${sig.Expiry||'?'}`;
+
+  const statsEl    = document.getElementById('modal-stats');
+  const prox       = State.config.price_proximity_percent ?? 2.0;
+  const emaPer     = State.config.ema_period ?? 9;
+  const minVolR    = State.config.min_breakdown_volume_ratio ?? 1.2;
+  // True resistance = surge peak, fallback to yesterday_high
+  const resistance = sig.Surge_High || sig.Yesterday_High || sig.Ten_Day_High || sig.Suggested_Strike;
+  const szFloor    = resistance ? resistance * (1 - prox / 100) : null;
+  const volColor   = (sig.Volume_Ratio >= minVolR) ? 'green' : 'amber';
+  const emaColor   = sig.Below_EMA ? 'green' : 'amber';
+  const g2ok       = sig.Sell_Zone_EMA_Confirmed;
+  const g2date     = sig.Sell_Zone_EMA_Confirm_Date || '—';
+
+  statsEl.innerHTML = `
+    <div class="stat-sep"></div>
+    <div class="section-title" style="margin-bottom:8px">Price Action</div>
+    ${statRow('Today Close',     `₹${fmt(sig.Today_Close)}`,     'teal')}
+    ${statRow('Surge High (Resistance)', `₹${fmt(sig.Surge_High)}`, 'amber')}
+    ${statRow('Yesterday High',  `₹${fmt(sig.Yesterday_High)}`,  '')}
+    ${statRow('Yesterday Close', `₹${fmt(sig.Yesterday_Close)}`, '')}
+    ${statRow('Yesterday Low',   `₹${fmt(sig.Yesterday_Low)}`,   '')}
+    ${statRow('Drop vs Prev Low',`-${fmt(sig.Drop_Pct)}%`,       'red')}
+    ${statRow('Breakdown Date',  sig.Breakdown_Date || '—',      '')}
+    <div class="stat-sep"></div>
+    <div class="section-title" style="margin-bottom:8px">Breakdown Confirmation</div>
+    ${statRow('Breakdown Volume', (sig.Breakdown_Volume||0).toLocaleString(), '')}
+    ${statRow('20d Avg Volume',   (sig.Avg_Volume_20d||0).toLocaleString(),   '')}
+    ${statRow('Volume Ratio',     `${fmt(sig.Volume_Ratio)}x`,                volColor)}
+    ${statRow('EMA'+emaPer+' at Breakdown', sig.EMA_At_Detection ? `₹${fmt(sig.EMA_At_Detection)}` : '—', '')}
+    ${statRow('Close Below EMA',  sig.Below_EMA ? '✓ Yes' : '✗ No',          emaColor)}
+    <div class="stat-sep"></div>
+    <div class="section-title" style="margin-bottom:8px">Surge</div>
+    ${statRow('Surge Gain',          `+${fmt(sig.Surge_Gain_Pct)}%`, 'green')}
+    ${statRow('Green Candles',       sig.Surge_Candles,               '')}
+    ${statRow('Allowed Red Candles', sig.Surge_Allowed_Reds ?? 0,    '')}
+    ${statRow('Surge Start',         sig.Surge_Start,                 '')}
+    ${statRow('Surge End',           sig.Surge_End,                   '')}
+    ${statRow('Days Since End',      `${sig.Days_Since_Surge_End ?? '?'}d`, '')}
+    <div class="stat-sep"></div>
+    <div class="section-title" style="margin-bottom:8px">Option</div>
+    ${statRow('Strike',      `₹${sig.Suggested_Strike?.toFixed(0)} CE`, 'amber')}
+    ${statRow('CE LTP',      `₹${fmt(sig.CE_LTP)}`,                    'teal')}
+    ${statRow('CE 30d High', sig.CE_30d_High ?? 'N/A',                  '')}
+    ${remarkBox(sig)}
+    ${statRow('CE OI', (sig.CE_OI||0).toLocaleString(), '')}
+    <div class="sell-zone-box" style="${g2ok ? '' : 'opacity:0.55'}">
+      <div class="szlabel">🔐 Sell Zone — 3 Sequential Gates</div>
+      <div style="font-size:11px;margin:6px 0 4px">
+        <span style="color:var(--green)">Gate 1 ✅</span>
+        <span style="color:var(--text2);margin-left:6px">Momentum break (close below prev low + surge ≥${State.config.min_gain_percent ?? 15}%)</span>
+      </div>
+      <div style="font-size:11px;margin:4px 0">
+        <span style="color:${g2ok ? 'var(--green)' : 'var(--amber)'}">${g2ok ? 'Gate 2 ✅' : 'Gate 2 ⏳'}</span>
+        <span style="color:var(--text2);margin-left:6px">${g2ok
+          ? `EMA${emaPer} breach + volume confirmed on ${g2date}`
+          : `Waiting: close below EMA${emaPer} with volume after breakdown`
+        }</span>
+      </div>
+      <div style="font-size:11px;margin:4px 0 8px">
+        <span style="color:${g2ok ? 'var(--text1)' : 'var(--text3)'}">Gate 3 ${g2ok ? '🟡' : '🔒'}</span>
+        <span style="color:var(--text2);margin-left:6px">${g2ok
+          ? `Price rallies within ${prox}% of Surge High`
+          : 'Locked until Gate 2 confirmed'
+        }</span>
+      </div>
+      ${resistance && g2ok
+        ? `<div class="szrange">₹${fmt(szFloor)} – ₹${fmt(resistance)}</div>
+           <div style="font-size:10px;color:var(--text2);margin-top:3px">Sell zone: within ${prox}% of Surge High ₹${fmt(resistance)}</div>`
+        : `<div class="szrange" style="color:var(--text2)">${g2ok ? '—' : 'Gate 2 not yet confirmed'}</div>`
+      }
+    </div>
+  `;
+
+  document.getElementById('detail-modal').classList.add('visible');
+
+  // Load mini chart
+  try {
+    const d    = await API.get(`/api/chart/${ticker}?days=60`);
+    const c    = d.candles;
+    const x0   = c[0].date;
+    const x1   = c.at(-1).date;
+    const prox = State.config.price_proximity_percent ?? 1.5;
+
+    const shapes      = [];
+    const annotations = [];
+
+    // Strike line (amber dotted)
+    if (d.strike) {
+      shapes.push({ type:'line', x0, x1, y0:d.strike, y1:d.strike,
+        line:{ color:'#ff7b29', width:1, dash:'dot' } });
+      annotations.push({
+        xref:'paper', x:0.02, y:d.strike, yref:'y',
+        text:`Strike ₹${d.strike?.toFixed(0)}`, showarrow:false,
+        font:{ color:'#ff7b29', size:9, family:"'JetBrains Mono',monospace" },
+        bgcolor:'rgba(255,123,41,0.12)', bordercolor:'rgba(255,123,41,0.4)',
+        borderwidth:1, borderpad:3,
+      });
+    }
+
+    // Surge window highlight (green band)
+    if (d.surge_start && d.surge_end) {
+      shapes.push({
+        type:'rect', x0:d.surge_start, x1:d.surge_end, y0:0, y1:1,
+        xref:'x', yref:'paper',
+        fillcolor:'rgba(0,217,126,0.06)', line:{ width:0 },
+      });
+    }
+
+    // Resistance ceiling (yesterday_high) — sell zone ceiling + floor band
+    if (d.yesterday_high) {
+      const szFloor = d.yesterday_high * (1 - prox / 100);
+      // Ceiling
+      shapes.push({ type:'line', x0, x1, y0:d.yesterday_high, y1:d.yesterday_high,
+        line:{ color:'#00d4b1', width:1.5, dash:'solid' } });
+      // Floor
+      shapes.push({ type:'line', x0, x1, y0:szFloor, y1:szFloor,
+        line:{ color:'#00d4b1', width:1, dash:'dash' } });
+      // Shaded sell zone band
+      shapes.push({
+        type:'rect', x0, x1, y0:szFloor, y1:d.yesterday_high,
+        fillcolor:'rgba(0,212,177,0.07)', line:{ width:0 },
+      });
+      annotations.push({
+        xref:'paper', x:0.98, y:d.yesterday_high, yref:'y',
+        text:`Resistance ₹${d.yesterday_high?.toFixed(2)}`, showarrow:false, xanchor:'right',
+        font:{ color:'#00d4b1', size:9, family:"'JetBrains Mono',monospace" },
+        bgcolor:'rgba(0,212,177,0.1)', bordercolor:'rgba(0,212,177,0.35)',
+        borderwidth:1, borderpad:3,
+      });
+    }
+
+    Plotly.react('modal-chart', [{
+      type:'candlestick',
+      x: c.map(r=>r.date),
+      open:c.map(r=>r.open), high:c.map(r=>r.high),
+      low:c.map(r=>r.low),   close:c.map(r=>r.close),
+      name:ticker,
+      increasing:{ line:{color:'#00d97e'}, fillcolor:'rgba(0,217,126,0.15)' },
+      decreasing:{ line:{color:'#ff3b5c'}, fillcolor:'rgba(255,59,92,0.15)' },
+    }], {
+      paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+      font:{ family:"'JetBrains Mono',monospace", size:10, color:'#7a91b0' },
+      margin:{l:50,r:10,t:10,b:40},
+      xaxis:{ gridcolor:'#1a3150', rangeslider:{visible:false}, tickfont:{size:9} },
+      yaxis:{ gridcolor:'#1a3150', side:'right', tickprefix:'₹', tickfont:{size:9} },
+      shapes, annotations, dragmode:'pan',
+    }, { responsive:true, displayModeBar:false, scrollZoom:true });
+  } catch(e) {}
+}
+
+function statRow(label, val, cls) {
+  return `<div class="stat-row">
+    <span class="stat-label">${label}</span>
+    <span class="stat-value ${cls}">${val}</span>
+  </div>`;
+}
+
+document.getElementById('modal-close').addEventListener('click', () => {
+  document.getElementById('detail-modal').classList.remove('visible');
+});
+document.getElementById('detail-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('detail-modal'))
+    document.getElementById('detail-modal').classList.remove('visible');
+});
+
+// ═══════════════════════════════════════════════════════
+//  SCAN TERMINAL / SSE
+// ═══════════════════════════════════════════════════════
+let currentSSE = null;
+
+async function startScan(endpoint, body={}) {
+  if (currentSSE) { currentSSE.close(); currentSSE = null; }
+  // Show overlay
+  const overlay = document.getElementById('scan-overlay');
+  overlay.classList.add('visible');
+  document.getElementById('terminal-log').innerHTML = '';
+  document.getElementById('prog-bar').style.width = '0%';
+  document.getElementById('prog-ticker').textContent = '—';
+  document.getElementById('prog-pct').textContent = '0 / 0';
+  document.getElementById('scan-status-text').textContent = 'Starting scan…';
+  document.getElementById('scan-found-count').textContent = '0 signals found';
+
+  // Disable buttons
+  document.getElementById('btn-screen-all').disabled = true;
+  document.getElementById('btn-screen-specific').disabled = true;
+
+  try {
+    const res = await API.post(endpoint, body);
+    const jobId = res.job_id;
+    const total = res.total;
+
+    // SSE
+    const sse = new EventSource(`/api/jobs/${jobId}/stream`);
+    currentSSE = sse;
+    let foundCount = 0;
+
+    sse.onmessage = e => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === 'log') {
+          appendLog(data.time, data.msg, data.level);
+        } else if (data.type === 'progress') {
+          const pct = data.total > 0 ? Math.round(data.current/data.total*100) : 0;
+          document.getElementById('prog-bar').style.width = pct + '%';
+          document.getElementById('prog-ticker').textContent = data.ticker || '—';
+          document.getElementById('prog-pct').textContent = `${data.current} / ${data.total}`;
+          document.getElementById('scan-status-text').textContent =
+            data.ticker ? `Scanning ${data.ticker}…` : 'Processing…';
+        } else if (data.type === 'done') {
+          foundCount = data.count || 0;
+          document.getElementById('scan-found-count').textContent =
+            `${foundCount} signal${foundCount!==1?'s':''} found`;
+          document.getElementById('prog-bar').style.width = '100%';
+          document.getElementById('scan-status-text').textContent = 'Scan complete ✓';
+          sse.close();
+          currentSSE = null;
+          document.getElementById('btn-screen-all').disabled = false;
+          document.getElementById('btn-screen-specific').disabled = false;
+          loadSignals();
+          loadAlerts();
+          refreshStatus();
+          if (foundCount > 0) toast('success',`Scan complete`,`${foundCount} new signal${foundCount!==1?'s':''} found`);
+          else toast('info','Scan complete','No new signals found');
+        }
+      } catch(err) {}
+    };
+
+    sse.onerror = () => {
+      sse.close(); currentSSE = null;
+      document.getElementById('btn-screen-all').disabled = false;
+      document.getElementById('btn-screen-specific').disabled = false;
+      appendLog('—','Connection to scan stream lost','fail');
+    };
+
+  } catch(err) {
+    document.getElementById('btn-screen-all').disabled = false;
+    document.getElementById('btn-screen-specific').disabled = false;
+    toast('error','Failed to start scan', err.message);
+    document.getElementById('scan-overlay').classList.remove('visible');
+  }
+}
+
+function appendLog(time, msg, level) {
+  const el = document.getElementById('terminal-log');
+  const line = document.createElement('div');
+  line.className = `log-line ${level||'info'}`;
+  line.innerHTML = `<span class="log-time">${time}</span><span class="log-msg">${msg}</span>`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+document.getElementById('terminal-close').addEventListener('click', () => {
+  document.getElementById('scan-overlay').classList.remove('visible');
+  // Don't cancel — still runs in background
+});
+
+// ═══════════════════════════════════════════════════════
+//  BUTTON HANDLERS
+// ═══════════════════════════════════════════════════════
+document.getElementById('btn-screen-all').addEventListener('click', () => {
+  startScan('/api/screen/all');
+});
+
+document.getElementById('btn-screen-specific').addEventListener('click', () => {
+  const raw = document.getElementById('specific-input').value.trim();
+  if (!raw) { toast('warn','Enter tickers','e.g. HDFCBANK, RELIANCE'); return; }
+  const tickers = raw.split(',').map(t=>t.trim().toUpperCase()).filter(Boolean);
+  startScan('/api/screen/specific', { tickers });
+});
+
+document.getElementById('btn-check-prox').addEventListener('click', async () => {
+  if (!State.signals.length) { toast('warn','No signals','Run a screen first'); return; }
+  document.getElementById('btn-check-prox').disabled = true;
+  try {
+    const r = await API.post('/api/proximity/check');
+    await loadAlerts();
+    refreshStatus();
+    if (r.hits) toast('success',`${r.hits} sell zone hit(s)!`);
+    else toast('info','No sell zone hits','No stocks in proximity right now');
+  } catch(e) { toast('error','Proximity check failed'); }
+  document.getElementById('btn-check-prox').disabled = false;
+});
+
+document.getElementById('btn-clear').addEventListener('click', async () => {
+  if (!confirm('Clear all signals and alerts?')) return;
+  try {
+    await API.del('/api/signals');
+    State.signals = [];
+    State.alerts  = [];
+    renderSignals();
+    renderAlerts();
+    updateBadge('signals',0);
+    updateBadge('alerts',0);
+    updateChartSelect();
+    Plotly.purge('summary-chart');
+    toast('success','Cleared all signals and alerts');
+    refreshStatus();
+  } catch(e) { toast('error','Clear failed'); }
+});
+
+// ═══════════════════════════════════════════════════════
+//  SETTINGS TAB
+// ═══════════════════════════════════════════════════════
+async function loadSettings() {
+  try {
+    State.config = await API.get('/api/config');
+    renderSettings();
+  } catch(e) {}
+}
+
+function renderSettings() {
+  const cfg = State.config;
+  const grid = document.getElementById('settings-grid');
+  grid.innerHTML = `
+    <!-- Screening filters -->
+    <div class="settings-card">
+      <div class="settings-card-title">Screening Filters</div>
+      <div class="field">
+        <label>Min Surge Gain (%)</label>
+        <input type="number" id="cfg-min-gain" value="${cfg.min_gain_percent}" min="3" step="0.5"/>
+      </div>
+      <div class="field">
+        <label>Min Green Candles in Surge</label>
+        <input type="number" id="cfg-min-green" value="${cfg.min_green_candles}" min="2" step="1"/>
+      </div>
+      <div class="field">
+        <label>Lookback Days</label>
+        <input type="number" id="cfg-lookback" value="${cfg.lookback_days}" min="7" step="1"/>
+      </div>
+      <div class="field">
+        <label>Price Proximity % (Sell Zone — vs prev-day High)</label>
+        <input type="number" id="cfg-prox" value="${cfg.price_proximity_percent}" min="0.1" step="0.1"/>
+      </div>
+      <div class="field">
+        <label>Min Drop % (breakdown candle below prev low)</label>
+        <input type="number" id="cfg-min-drop" value="${cfg.min_drop_percent ?? 0.5}" min="0.1" step="0.1"/>
+      </div>
+      <div class="field">
+        <label>Min Breakdown Volume Ratio (vs 20d avg)</label>
+        <input type="number" id="cfg-vol-ratio" value="${cfg.min_breakdown_volume_ratio ?? 1.2}" min="0.5" step="0.1"/>
+      </div>
+      <div class="field">
+        <label>Surge Recency (days) — surge must end within N days</label>
+        <input type="number" id="cfg-recency" value="${cfg.surge_recency_days ?? 5}" min="1" step="1"/>
+      </div>
+      <div class="field">
+        <label>Max Signal Age (days) — auto-prune old signals</label>
+        <input type="number" id="cfg-max-age" value="${cfg.max_signal_age_days ?? 5}" min="1" step="1"/>
+      </div>
+    </div>
+
+    <!-- CE Option filter -->
+    <div class="settings-card">
+      <div class="settings-card-title">CE Option Filter</div>
+      <div class="toggle-row">
+        <span class="toggle-label">CE LTP must be > 30d Historical High</span>
+        <label class="toggle">
+          <input type="checkbox" id="cfg-ce-filter" ${cfg.ce_above_historical_high?'checked':''}>
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+      <div class="field">
+        <label>CE Historical High Lookback (days)</label>
+        <input type="number" id="cfg-ce-days" value="${cfg.ce_history_days}" min="7" step="1"/>
+      </div>
+    </div>
+
+    <!-- EMA Trend Filter -->
+    <div class="settings-card">
+      <div class="settings-card-title">EMA Trend Filter</div>
+      <div class="toggle-row">
+        <span class="toggle-label">Enable EMA Filter (breakdown below EMA)</span>
+        <label class="toggle">
+          <input type="checkbox" id="cfg-ema-en" ${cfg.ema_filter_enabled?'checked':''}>
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+      <div class="field">
+        <label>EMA Period</label>
+        <input type="number" id="cfg-ema-period" value="${cfg.ema_period ?? 9}" min="3" step="1"/>
+      </div>
+    </div>
+
+    <!-- Auto-scan -->
+    <div class="settings-card">
+      <div class="settings-card-title">Auto-Scan</div>
+      <div class="toggle-row">
+        <span class="toggle-label">Enable Auto-Scan</span>
+        <label class="toggle">
+          <input type="checkbox" id="cfg-auto-en" ${cfg.auto_scan_enabled?'checked':''}>
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+      <div class="field">
+        <label>Scan Interval (min)</label>
+        <input type="number" id="cfg-interval" value="${cfg.auto_scan_interval_min}" min="10" step="5"/>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Market Hours Only (9:15–15:30 IST)</span>
+        <label class="toggle">
+          <input type="checkbox" id="cfg-mkt-only" ${cfg.market_hours_only?'checked':''}>
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Telegram -->
+    <div class="settings-card">
+      <div class="settings-card-title">Telegram Alerts</div>
+      <div class="field">
+        <label>Bot Token</label>
+        <input type="password" id="cfg-tg-token" value="${cfg.telegram_bot_token}" placeholder="1234567890:ABCDef…"/>
+      </div>
+      <div class="field">
+        <label>Chat ID</label>
+        <input type="text" id="cfg-tg-chat" value="${cfg.telegram_chat_id}" placeholder="-100123456789"/>
+      </div>
+    </div>
+
+    <!-- Premium Zone settings -->
+    <div class="settings-card">
+      <div class="settings-card-title">💎 Premium Sell Zone</div>
+      <label>Min Vol Surge Ratio
+        <span class="cfg-hint">Minimum today_vol / 20d-avg to qualify (e.g. 1.5 = 50% above average). Stocks below this are hard-excluded.</span>
+        <input type="number" id="cfg-prem-vol" value="${cfg.premium_min_vol_surge ?? 1.5}" min="0.5" max="5" step="0.1"/>
+      </label>
+      <label>OTM Depth (strikes above ATM)
+        <span class="cfg-hint">How many strikes above ATM to show in the CE ladder (1–5).</span>
+        <input type="number" id="cfg-prem-otm" value="${cfg.premium_otm_depth ?? 3}" min="1" max="5" step="1"/>
+      </label>
+    </div>
+
+    <!-- Tickers upload -->
+    <div class="settings-card">
+      <div class="settings-card-title">Ticker List</div>
+      <label class="file-upload-area" id="ticker-upload-area">
+        <input type="file" id="ticker-file" accept=".csv"/>
+        <div class="upload-icon">📂</div>
+        <div class="upload-text">Upload tickers CSV</div>
+        <div class="upload-sub">Requires a SYMBOL column</div>
+      </label>
+      <div id="ticker-upload-status" style="font-size:11px;color:var(--text2);margin-top:4px"></div>
+    </div>
+
+    <div class="settings-save">
+      <button class="btn btn-outline" id="btn-settings-cancel">Discard</button>
+      <button class="btn btn-primary" id="btn-settings-save">Save Settings</button>
+    </div>
+  `;
+
+  document.getElementById('ticker-file').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const r = await fetch('/api/tickers/upload', { method:'POST', body:formData });
+      const d = await r.json();
+      document.getElementById('ticker-upload-status').textContent =
+        `✓ ${d.count} tickers loaded`;
+      toast('success',`${d.count} tickers loaded`);
+    } catch(err) {
+      toast('error','Upload failed', err.message);
+    }
+  });
+
+  document.getElementById('btn-settings-save').addEventListener('click', saveSettings);
+  document.getElementById('btn-settings-cancel').addEventListener('click', loadSettings);
+}
+
+async function saveSettings() {
+  const cfg = {
+    min_gain_percent:          parseFloat(document.getElementById('cfg-min-gain').value),
+    min_green_candles:         parseInt(document.getElementById('cfg-min-green').value),
+    lookback_days:             parseInt(document.getElementById('cfg-lookback').value),
+    price_proximity_percent:      parseFloat(document.getElementById('cfg-prox').value),
+    min_drop_percent:             parseFloat(document.getElementById('cfg-min-drop').value),
+    min_breakdown_volume_ratio:   parseFloat(document.getElementById('cfg-vol-ratio').value),
+    surge_recency_days:           parseInt(document.getElementById('cfg-recency').value),
+    max_signal_age_days:          parseInt(document.getElementById('cfg-max-age').value),
+    ema_filter_enabled:           document.getElementById('cfg-ema-en').checked,
+    ema_period:                   parseInt(document.getElementById('cfg-ema-period').value),
+    ce_above_historical_high:  document.getElementById('cfg-ce-filter').checked,
+    ce_history_days:           parseInt(document.getElementById('cfg-ce-days').value),
+    auto_scan_enabled:         document.getElementById('cfg-auto-en').checked,
+    auto_scan_interval_min:    parseInt(document.getElementById('cfg-interval').value),
+    market_hours_only:         document.getElementById('cfg-mkt-only').checked,
+    telegram_bot_token:        document.getElementById('cfg-tg-token').value,
+    telegram_chat_id:          document.getElementById('cfg-tg-chat').value,
+    premium_min_vol_surge:     parseFloat(document.getElementById('cfg-prem-vol').value),
+    premium_otm_depth:         parseInt(document.getElementById('cfg-prem-otm').value),
+  };
+  try {
+    State.config = await API.put('/api/config', cfg);
+    toast('success','Settings saved');
+    refreshStatus();
+  } catch(e) { toast('error','Save failed', e.message); }
+}
+
+// ═══════════════════════════════════════════════════════
+//  SCAN LOG
+// ═══════════════════════════════════════════════════════
+async function loadLogs() {
+  try {
+    State.logs = await API.get('/api/scan-log');
+    renderLogs();
+    updateBadge('logs', State.logs.length);
+  } catch(e) {}
+}
+
+function renderLogs() {
+  const tbody = document.getElementById('log-tbody');
+  if (!State.logs.length) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><div class="es-icon">🕒</div><div class="es-title">No scan history</div></div></td></tr>`;
+    document.getElementById('ls-total').textContent = 0;
+    document.getElementById('ls-tickers').textContent = 0;
+    document.getElementById('ls-signals').textContent = 0;
+    document.getElementById('ls-nse').textContent = 0;
+    return;
+  }
+  const total    = State.logs.length;
+  const tickers  = State.logs.reduce((a,l)=>a+(l.tickers_scanned||0),0);
+  const signals  = State.logs.reduce((a,l)=>a+(l.signals_found||0),0);
+  const nse      = State.logs.reduce((a,l)=>a+(l.nse_calls||0),0);
+  document.getElementById('ls-total').textContent   = total;
+  document.getElementById('ls-tickers').textContent = tickers.toLocaleString();
+  document.getElementById('ls-signals').textContent = signals;
+  document.getElementById('ls-nse').textContent     = nse.toLocaleString();
+
+  tbody.innerHTML = State.logs.map(l => `<tr>
+    <td class="mono" style="color:var(--text1);font-size:11px">${l.time}</td>
+    <td class="mono">${l.tickers_scanned||0}</td>
+    <td class="mono" style="color:${(l.signals_found||0)>0?'var(--green)':'var(--text2)'}">
+      ${l.signals_found||0}
+    </td>
+    <td>${l.nse_calls||0} <span class="nse-calls-badge">${l.nse_calls||0} calls</span></td>
+  </tr>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  TAB NAVIGATION
+// ═══════════════════════════════════════════════════════
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+
+    // Lazy loads for native tabs
+    if (tab.dataset.tab === 'charts')  renderSummaryChart();
+    if (tab.dataset.tab === 'logs')    loadLogs();
+    if (tab.dataset.tab === 'settings') loadSettings();
+    if (tab.dataset.tab === 'premium') loadPremiumZone();
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════
+function fmt(n) {
+  if (n == null || n === '' || n === 'N/A') return '—';
+  return parseFloat(n).toFixed(2);
+}
+
+function updateBadge(key, count) {
+  const el = document.getElementById(`badge-${key}`);
+  if (el) el.textContent = count;
+}
+
+// ═══════════════════════════════════════════════════════
+//  PREMIUM SELL ZONE
+// ═══════════════════════════════════════════════════════
+const PZ = { data: [] };
+
+async function loadPremiumZone() {
+  try {
+    PZ.data = await API.get('/api/premium-zone');
+    renderPremiumZone();
+    updateBadge('premium', PZ.data.length);
+  } catch(e) {
+    toast('error', 'Failed to load Premium Zone data');
+  }
+}
+
+function renderPremiumZone() {
+  const tbody    = document.getElementById('pz-tbody');
+  const rows     = PZ.data;
+  const maxScore = rows.reduce((m, r) => Math.max(m, r.Premium_Score || 0), 0);
+
+  document.getElementById('pz-count').textContent = `${rows.length} stocks`;
+  document.getElementById('pz-stat-candidates').textContent  = rows.length || '—';
+  // All results in the table are vol-confirmed (hard gated in backend)
+  document.getElementById('pz-stat-vol-surge').textContent   = rows.length > 0 ? rows.length + ' / ' + rows.length : '—';
+  document.getElementById('pz-stat-top-score').textContent   = rows.length ? rows[0].Premium_Score?.toFixed(1) ?? '—' : '—';
+  document.getElementById('pz-stat-scanned-at').textContent  = rows.length ? (rows[0].Scanned_At?.split(' ')[1] ?? '—') : '—';
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="14">
+      <div class="empty-state">
+        <div class="es-icon">💎</div>
+        <div class="es-title">No premium zone data</div>
+        <div>Click <strong>Scan Premium Zone</strong> — requires Gate-2-confirmed signals in proximity range</div>
+      </div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const rankClass  = i < 3 ? 'top' : '';
+    // Vol badge: shows vol ratio + whether high actually tested resistance
+    const volRatio   = r.Vol_Surge_Ratio != null ? r.Vol_Surge_Ratio.toFixed(2)+'x' : '—';
+    const highOK     = r.High_Near_Resistance;
+    const volBadge   = r.Is_Vol_Surge
+      ? `<span class="vol-surge-badge" title="High tested resistance zone">🔥 ${volRatio}</span>`
+      : (r.Vol_Surge_Ratio != null && r.Vol_Surge_Ratio >= 1.5 && !highOK)
+        ? `<span style="color:var(--amber);font-family:var(--font-mono);font-size:11px" title="Vol OK but High not at resistance">${volRatio} ⚠</span>`
+        : `<span style="color:var(--text2);font-family:var(--font-mono);font-size:11px">${volRatio}</span>`;
+
+    const scoreBarW  = maxScore > 0 ? Math.min(100, (r.Premium_Score / maxScore) * 100).toFixed(1) : 0;
+
+    // Option ladder cells: ATM, +1, +2, +3
+    function ladderCell(strike, ltp, oi, isAtm) {
+      if (!strike) return `<td style="color:var(--text3)">—</td>`;
+      const oiStr = oi >= 1000 ? (oi/1000).toFixed(0)+'K' : (oi||0).toString();
+      return `<td style="${isAtm?'border-left:1px solid var(--border-hi)':''}">
+        <div class="pz-ladder-cell ${isAtm ? 'atm' : ''} ${r.Is_Vol_Surge ? 'vol-surge' : ''}">
+          <span class="pz-cell-label">${isAtm ? 'ATM' : ''}</span>
+          <span class="pz-cell-strike">₹${parseInt(strike)}</span>
+          <span class="pz-cell-ltp ${isAtm ? 'atm' : ''}">₹${fmt(ltp)}</span>
+          <span class="pz-cell-oi">OI:${oiStr}</span>
+        </div>
+      </td>`;
+    }
+
+    return `<tr class="${i === 0 ? 'selected' : ''}">
+      <td><span class="pz-rank ${rankClass}">${i+1}</span></td>
+      <td class="ticker">${r.Ticker}</td>
+      <td class="teal mono">₹${fmt(r.Current_Price)}</td>
+      <td class="amber mono">₹${fmt(r.Surge_High)}</td>
+      <td class="mono" style="color:${r.Distance_Pct <= 1 ? 'var(--red)' : 'var(--text1)'}">
+        ${fmt(r.Distance_Pct)}%</td>
+      <td class="mono" style="color:${r.High_Near_Resistance ? 'var(--green)' : 'var(--text2)'};font-size:11px">
+        ${r.Today_High ? '₹'+fmt(r.Today_High) : '—'}
+        ${r.High_Near_Resistance ? '<span style="color:var(--green);margin-left:3px" title="High near resistance">✓</span>' : '<span style="color:var(--amber);margin-left:3px" title="High NOT near resistance">⚠</span>'}
+      </td>
+      <td>${volBadge}</td>
+      ${ladderCell(r.ATM_Strike,  r.ATM_CE_LTP,  r.ATM_CE_OI,  true)}
+      ${ladderCell(r.OTM1_Strike, r.OTM1_CE_LTP, r.OTM1_CE_OI, false)}
+      ${ladderCell(r.OTM2_Strike, r.OTM2_CE_LTP, r.OTM2_CE_OI, false)}
+      ${ladderCell(r.OTM3_Strike, r.OTM3_CE_LTP, r.OTM3_CE_OI, false)}
+      <td class="amber mono" style="font-weight:600">₹${r.Sell_Strike ? parseInt(r.Sell_Strike) : '—'}</td>
+      <td class="mono" style="color:var(--teal);font-size:10px">${r.G2_Date || '—'}</td>
+      <td class="green mono">+${fmt(r.Surge_Gain_Pct)}%</td>
+      <td>
+        <div class="pz-score-bar">
+          <div class="bar"><div class="bar-fill" style="width:${scoreBarW}%"></div></div>
+          <span class="pz-score-num">${r.Premium_Score?.toFixed(1) ?? '—'}</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Premium Zone Scan Button ─────────────────────────────────
+document.getElementById('btn-pz-scan').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-pz-scan');
+  btn.disabled = true;
+  btn.textContent = '⟳ Scanning…';
+
+  try {
+    const { job_id } = await API.post('/api/premium-zone/scan');
+    // Reuse the scan overlay / SSE terminal
+    const overlay = document.getElementById('scan-overlay');
+    const logEl   = document.getElementById('terminal-log');
+    const progBar = document.getElementById('prog-bar');
+    const progTk  = document.getElementById('prog-ticker');
+    const progPct = document.getElementById('prog-pct');
+    const statTxt = document.getElementById('scan-status-text');
+    const fndCnt  = document.getElementById('scan-found-count');
+
+    logEl.innerHTML = '';
+    progBar.style.width = '0%';
+    statTxt.textContent = 'Premium Zone Scan running…';
+    fndCnt.textContent  = '0 candidates';
+    overlay.classList.add('visible');
+
+    const sse = new EventSource(`/api/jobs/${job_id}/stream`);
+    sse.onmessage = e => {
+      const d = JSON.parse(e.data);
+      if (d.type === 'log') {
+        const line = document.createElement('div');
+        line.className = `log-line ${d.level}`;
+        line.innerHTML = `<span class="log-time">${d.time}</span><span class="log-msg">${d.msg}</span>`;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+      if (d.type === 'progress') {
+        const pct = d.total > 0 ? Math.round(d.current/d.total*100) : 0;
+        progBar.style.width = pct + '%';
+        progTk.textContent  = d.ticker || '—';
+        progPct.textContent = `${d.current} / ${d.total}`;
+      }
+      if (d.type === 'done') {
+        statTxt.textContent = d.status === 'done' ? 'Premium Zone scan complete' : 'Scan error';
+        fndCnt.textContent  = `${d.count} candidate(s)`;
+        sse.close();
+        btn.disabled = false;
+        btn.innerHTML = '💎 Scan Premium Zone';
+        loadPremiumZone();
+        toast('success', `Premium Zone scan done`, `${d.count} candidate(s) found`);
+        progBar.style.width = '100%';
+      }
+    };
+    sse.onerror = () => {
+      sse.close();
+      btn.disabled = false;
+      btn.innerHTML = '💎 Scan Premium Zone';
+      toast('error', 'Premium Zone scan stream error');
+    };
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = '💎 Scan Premium Zone';
+    toast('error', 'Failed to start scan', e.message);
+  }
+});
+
+document.getElementById('btn-pz-refresh').addEventListener('click', () => loadPremiumZone());
+
+document.getElementById('btn-pz-clear').addEventListener('click', async () => {
+  try {
+    await API.del('/api/premium-zone');
+    PZ.data = [];
+    renderPremiumZone();
+    updateBadge('premium', 0);
+    toast('success', 'Premium Zone cleared');
+  } catch(e) { toast('error', 'Clear failed'); }
+});
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+async function init() {
+  startClock();
+  await refreshStatus();
+  await loadSettings();
+  await loadSignals();
+  await loadAlerts();
+  await loadLogs();
+  await loadPremiumZone();
+
+  // Auto-refresh every 60 seconds
+  setInterval(async () => {
+    await refreshStatus();
+    await loadSignals();
+    await loadAlerts();
+  }, 60000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

@@ -1,0 +1,1740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NSE Strategy Backtester — Momentum Loss CE Sell</title>
+<style>
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --surface2: #21262d;
+    --border:   #30363d;
+    --accent:   #f0883e;
+    --green:    #3fb950;
+    --red:      #f85149;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --win-bg:   #1a2e1a;
+    --loss-bg:  #2e1a1a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* Full-page scroll layout:
+     Header sticks to top. Sidebar sticks below header. Main content flows naturally. */
+  :root { --header-h: 68px; }
+
+  html { height: 100%; }
+  body {
+    min-height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+
+  header {
+    position: sticky; top: 0; z-index: 50;
+    height: var(--header-h);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header small { color: var(--muted); font-size: 12px; }
+
+  /* Shell: plain row, stretches to page height naturally */
+  #shell { display: flex; align-items: flex-start; min-height: calc(100vh - var(--header-h)); }
+
+  /* ── Sidebar sticks below header, scrolls independently ── */
+  .sidebar {
+    width: 220px; flex-shrink: 0;
+    position: sticky;
+    top: var(--header-h);
+    max-height: calc(100vh - var(--header-h));
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto; overflow-x: hidden;
+    padding: 20px 16px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .sidebar h2 { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; margin-top: 10px; }
+  input[type=text], input[type=number], select {
+    width: 100%; padding: 7px 10px; border-radius: 6px;
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); font-size: 13px;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .btn {
+    display: block; width: 100%; padding: 10px;
+    background: var(--accent); color: #000; border: none;
+    border-radius: 6px; font-weight: 700; font-size: 14px;
+    cursor: pointer; margin-top: 8px; letter-spacing: .02em;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.secondary { background: var(--surface2); color: var(--text); }
+
+  /* ── Progress ── */
+  #progress-box {
+    display: none;
+    background: var(--surface2); border-radius: 8px;
+    padding: 12px; text-align: center; font-size: 13px;
+  }
+  .spinner {
+    display: inline-block; width: 16px; height: 16px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    margin-right: 8px; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Main content ── */
+  /* .main: no height constraint, no overflow — the PAGE scrolls naturally */
+  .main { flex: 1; min-width: 0; padding: 24px; display: flex; flex-direction: column; gap: 24px; }
+
+  /* ── Aggregate cards ── */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 14px;
+  }
+  .card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .card .val { font-size: 26px; font-weight: 700; }
+  .card .val.green { color: var(--green); }
+  .card .val.red   { color: var(--red); }
+  .card .val.acc   { color: var(--accent); }
+
+  /* ── Accuracy bar ── */
+  .acc-bar-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .acc-bar-wrap h3 { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .acc-bar { height: 12px; background: var(--red); border-radius: 6px; overflow: hidden; }
+  .acc-fill { height: 100%; background: var(--green); border-radius: 6px; transition: width 0.6s ease; }
+  .acc-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+  /* ── Per-ticker sections ── */
+  .ticker-section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden; min-width: 0;
+  }
+  .ticker-header {
+    padding: 14px 16px; background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+    cursor: pointer; user-select: none;
+  }
+  .ticker-header h3 { font-size: 15px; font-weight: 700; }
+  .ticker-stats { display: flex; gap: 16px; font-size: 12px; }
+  .badge { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge.win  { background: var(--win-bg);  color: var(--green); }
+  .badge.loss { background: var(--loss-bg); color: var(--red); }
+  .ticker-body {
+    overflow-x: auto;   /* horizontal scroll for wide table only */
+  }
+
+  /* ── Trade table ── */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: var(--surface2); color: var(--muted); padding: 8px 10px; text-align: left;
+       font-weight: 600; position: sticky; top: 0; z-index: 2; border-bottom: 1px solid var(--border); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  tr.win  td:first-child { border-left: 3px solid var(--green); }
+  tr.loss td:first-child { border-left: 3px solid var(--red); }
+  tr:hover td { background: var(--surface2); }
+  .tag-win  { color: var(--green); font-weight: 700; }
+  .tag-loss { color: var(--red);   font-weight: 700; }
+
+  /* ── Empty/error states ── */
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty svg { opacity: .2; margin-bottom: 16px; }
+  .error-box { background: #2e1a1a; border: 1px solid var(--red); border-radius: 8px; padding: 12px 16px; color: var(--red); }
+
+  /* ── Tooltip ── */
+  [data-tip] { position: relative; cursor: help; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%);
+    background: #1c2128; color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 10px; white-space: nowrap;
+    font-size: 11px; pointer-events: none; opacity: 0; transition: opacity .15s;
+    z-index: 99;
+  }
+  [data-tip]:hover::after { opacity: 1; }
+
+  /* ── Cache badge ── */
+  .cache-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+    letter-spacing: .03em;
+  }
+  .cache-badge.hit  { background: #1a2535; color: #58a6ff; border: 1px solid #1f6feb; }
+  .cache-badge.miss { background: #1f2a1f; color: var(--green); border: 1px solid #238636; }
+
+  /* ── JSON export button ── */
+  #export-btn { display: none; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Chart Modal ── */
+  #chart-modal {
+    display: none; position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,.72); backdrop-filter: blur(4px);
+    align-items: center; justify-content: center;
+  }
+  #chart-modal.open { display: flex; }
+  #chart-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; width: min(980px, 96vw);
+    max-height: 92vh; overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 24px 64px rgba(0,0,0,.6);
+  }
+  #chart-topbar {
+    padding: 14px 18px; background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-shrink: 0;
+  }
+  #chart-topbar h2 { font-size: 15px; font-weight: 700; }
+  #chart-topbar .meta { font-size: 12px; color: var(--muted); }
+  #chart-close {
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 4px 12px;
+    cursor: pointer; font-size: 16px; line-height: 1;
+  }
+  #chart-close:hover { border-color: var(--accent); }
+  #chart-wrap { padding: 16px; overflow: auto; flex: 1; }
+  canvas#trade-canvas { display: block; border-radius: 8px; }
+  #chart-legend {
+    display: flex; flex-wrap: wrap; gap: 12px 20px;
+    padding: 10px 18px 16px; font-size: 11px; color: var(--muted);
+    border-top: 1px solid var(--border); flex-shrink: 0;
+  }
+  .leg { display: flex; align-items: center; gap: 5px; }
+  .leg-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  #chart-loading {
+    padding: 60px; text-align: center; color: var(--muted); font-size: 13px;
+  }
+  /* clickable trade rows */
+  tbody tr { cursor: pointer; }
+  tbody tr:hover td { background: #1e2a3a !important; }
+
+  /* ── Dual-Expiry table blocks ─────────────────────────────────────────── */
+  :root {
+    --cur-col:   #38bdf8;  /* sky-blue  = current month */
+    --cur-dim:   rgba(56,189,248,0.10);
+    --cur-win:   rgba(56,189,248,0.13);
+    --cur-loss:  rgba(248,81,73,0.12);
+    --nxt-col:   #a78bfa;  /* violet    = next month    */
+    --nxt-dim:   rgba(167,139,250,0.10);
+    --nxt-win:   rgba(167,139,250,0.18);
+    --nxt-loss:  rgba(248,81,73,0.10);
+  }
+  /* group header row */
+  .th-cur { background: rgba(56,189,248,0.12)!important; color:var(--cur-col)!important; text-align:center; }
+  .th-nxt { background: rgba(167,139,250,0.12)!important; color:var(--nxt-col)!important; text-align:center; }
+  /* data cells */
+  .td-cur  { background: var(--cur-dim); }
+  .td-nxt  { background: var(--nxt-dim); }
+  .td-cur-win  { background: var(--cur-win)!important; }
+  .td-cur-loss { background: var(--cur-loss)!important; }
+  .td-nxt-win  { background: var(--nxt-win)!important; }
+  .td-nxt-loss { background: var(--nxt-loss)!important; }
+  /* result tag colours */
+  .tag-cur-win  { color: var(--cur-col); font-weight:700; }
+  .tag-cur-loss { color: var(--red);     font-weight:700; }
+  .tag-nxt-win  { color: var(--nxt-col); font-weight:700; }
+  .tag-nxt-loss { color: var(--red);     font-weight:700; }
+  /* left-border logic: current-month result drives the row stripe */
+  tr.cur-win  > td:first-child { border-left: 3px solid var(--cur-col)!important; }
+  tr.cur-loss > td:first-child { border-left: 3px solid var(--red)!important;     }
+  /* divergent row highlight (one side WIN, other LOSS) */
+  tr.divergent > td { background: rgba(167,139,250,0.06)!important; }
+  tr.divergent > td:first-child { border-left: 3px solid var(--nxt-col)!important; }
+
+  /* ── Dual-expiry comparison panel ─────────────────────────────────────── */
+  .exp-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+  }
+  .exp-panel-header {
+    padding: 12px 16px; background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .exp-panel-header h3 { font-size: 14px; font-weight: 700; }
+  .exp-panel-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .exp-cohort-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .exp-card {
+    border-radius: 8px; padding: 14px; border: 1px solid var(--border);
+  }
+  .exp-card.cur { background: rgba(56,189,248,0.06);  border-color: rgba(56,189,248,0.3); }
+  .exp-card.nxt { background: rgba(167,139,250,0.06); border-color: rgba(167,139,250,0.3); }
+  .exp-card-title { font-size: 11px; font-weight: 700; text-transform: uppercase;
+                    letter-spacing: .07em; margin-bottom: 10px; }
+  .exp-card-title.cur { color: var(--cur-col); }
+  .exp-card-title.nxt { color: var(--nxt-col); }
+  .exp-stat { display: flex; justify-content: space-between; font-size: 12px;
+              padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+  .exp-stat:last-child { border-bottom: none; }
+  .exp-stat-label { color: var(--muted); }
+  .exp-stat-val   { font-weight: 600; }
+  /* divergent count pill */
+  .div-pill {
+    display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;
+    background:rgba(167,139,250,0.18); color:var(--nxt-col);
+    border:1px solid rgba(167,139,250,0.35);
+  }
+
+  /* Premium surge setup highlighting */
+  tr.high-prem td { background: rgba(240,136,62,0.04); }
+  tr.high-prem td:first-child { border-left: 3px solid var(--accent) !important; }
+  tr.high-prem:hover td { background: #2a2010 !important; }
+  .prem-score-pill {
+    display: inline-block; padding: 1px 7px; border-radius: 10px;
+    font-size: 10px; font-weight: 700; letter-spacing: .03em;
+    background: rgba(240,136,62,0.18); color: var(--accent);
+    border: 1px solid rgba(240,136,62,0.35);
+  }
+  .vol-surge-hi { color: var(--accent); font-weight: 700; }
+  .vol-surge-lo { color: var(--muted); }
+
+  /* Premium analysis panel */
+  .prem-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+  }
+  .prem-panel-header {
+    padding: 14px 16px; background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .prem-panel-header h3 { font-size: 14px; font-weight: 700; }
+  .prem-panel-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .cohort-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .cohort-card {
+    border-radius: 8px; padding: 14px;
+    border: 1px solid var(--border);
+  }
+  .cohort-card.high { background: rgba(240,136,62,0.07); border-color: rgba(240,136,62,0.3); }
+  .cohort-card.normal { background: rgba(139,148,158,0.06); }
+  .cohort-title { font-size: 11px; font-weight: 700; text-transform: uppercase;
+                  letter-spacing: .07em; margin-bottom: 10px; }
+  .cohort-title.high { color: var(--accent); }
+  .cohort-title.normal { color: var(--muted); }
+  .cohort-stat { display: flex; justify-content: space-between;
+                 font-size: 12px; padding: 4px 0;
+                 border-bottom: 1px solid rgba(255,255,255,.04); }
+  .cohort-stat:last-child { border-bottom: none; }
+  .cohort-stat-label { color: var(--muted); }
+  .cohort-stat-val { font-weight: 600; }
+  .dual-bar-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .dual-bar-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .dual-bar-label { width: 90px; color: var(--muted); font-size: 11px; }
+  .dual-bar { flex: 1; height: 10px; background: var(--surface2);
+               border-radius: 5px; overflow: hidden; }
+  .dual-bar-fill { height: 100%; border-radius: 5px; transition: width .5s; }
+  .dual-bar-val { width: 48px; text-align: right; font-weight: 700; font-size: 12px; }
+  .filter-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .filter-row label { font-size: 12px; color: var(--muted); }
+  .filter-chip {
+    padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); font-size: 12px;
+    cursor: pointer; transition: all .15s;
+  }
+  .filter-chip.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+
+  /* ── Ticker Picker ── */
+  .ticker-chip {
+    display:inline-flex; align-items:center; gap:4px;
+    padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600;
+    background:rgba(240,136,62,0.18); color:var(--accent);
+    border:1px solid rgba(240,136,62,0.4);
+    cursor:pointer; transition:all .12s;
+  }
+  .ticker-chip:hover { background:rgba(240,136,62,0.3); }
+  .ticker-chip .chip-x { font-size:13px; line-height:1; margin-left:1px; opacity:.7; }
+  .ticker-chip .chip-x:hover { opacity:1; color:var(--red); }
+
+  .sector-header {
+    padding:4px 10px 2px;
+    font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+    color:var(--muted); background:var(--surface);
+    position:sticky; top:0; z-index:1;
+  }
+  .ticker-row {
+    display:flex; align-items:center; gap:8px;
+    padding:5px 12px; cursor:pointer; transition:background .1s;
+  }
+  .ticker-row:hover { background:var(--surface2); }
+  .ticker-row input[type=checkbox] { accent-color:var(--accent); width:13px; height:13px; flex-shrink:0; }
+  .ticker-row .t-sym  { font-size:12px; font-weight:700; color:var(--text); min-width:80px; }
+  .ticker-row .t-name { font-size:11px; color:var(--muted); }
+
+  .preset-btn {
+    padding:2px 10px; border-radius:10px; font-size:10px; font-weight:600;
+    background:var(--surface); border:1px solid var(--border); color:var(--text);
+    cursor:pointer; transition:all .12s;
+  }
+  .preset-btn:hover { border-color:var(--accent); color:var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+  </svg>
+  <div>
+    <h1>NSE Strategy Backtester</h1>
+    <small>Momentum Loss CE Sell — 3-Gate Walk-Forward Simulation</small>
+  </div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+    <span id="cache-status"></span>
+    <button id="export-btn" class="btn secondary" style="width:auto;padding:7px 14px;font-size:12px;"
+            onclick="exportJSON()">⬇ Export JSON</button>
+  </div>
+</header>
+
+<div id="shell">
+  <!-- ─── Sidebar ─── -->
+  <div class="sidebar">
+    <div>
+      <h2>Tickers</h2>
+      <label>NSE F&amp;O Stocks</label>
+
+      <!-- Selected chips display -->
+      <div id="ticker-chips" style="
+        display:flex; flex-wrap:wrap; gap:5px;
+        min-height:34px; padding:5px 8px;
+        background:var(--bg); border:1px solid var(--border); border-radius:6px;
+        cursor:pointer; margin-bottom:6px;
+      " onclick="togglePicker()">
+        <span id="chips-placeholder" style="color:var(--muted);font-size:12px;line-height:24px;">
+          Click to select tickers…
+        </span>
+      </div>
+
+      <!-- Picker dropdown -->
+      <div id="ticker-picker" style="display:none;position:relative;z-index:100;">
+        <div style="
+          background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+          overflow:hidden; box-shadow:0 8px 32px rgba(0,0,0,.6);
+        ">
+          <!-- Search -->
+          <div style="padding:8px 10px;border-bottom:1px solid var(--border);">
+            <input type="text" id="ticker-search" placeholder="Search ticker or sector…"
+              oninput="filterTickerList(this.value)"
+              style="width:100%;padding:6px 10px;border-radius:5px;
+                     background:var(--bg);border:1px solid var(--border);
+                     color:var(--text);font-size:12px;">
+          </div>
+          <!-- Presets -->
+          <div style="padding:6px 10px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:5px;">
+            <span style="font-size:10px;color:var(--muted);align-self:center;margin-right:2px;">Quick:</span>
+            <button class="preset-btn" onclick="applyPreset('nifty50top')">Nifty 50 Top</button>
+            <button class="preset-btn" onclick="applyPreset('banking')">Banking</button>
+            <button class="preset-btn" onclick="applyPreset('it')">IT</button>
+            <button class="preset-btn" onclick="applyPreset('fmcg')">FMCG</button>
+            <button class="preset-btn" onclick="applyPreset('auto')">Auto</button>
+            <button class="preset-btn" onclick="applyPreset('pharma')">Pharma</button>
+            <button class="preset-btn" onclick="selectAllTickers()" style="color:var(--accent);border-color:var(--accent);">Select All</button>
+            <button class="preset-btn" onclick="clearAllTickers()" style="color:var(--red);border-color:var(--red);">Clear All</button>
+          </div>
+          <!-- List with groups -->
+          <div id="ticker-list" style="max-height:260px;overflow-y:auto;padding:4px 0;"></div>
+          <!-- Footer -->
+          <div style="padding:8px 12px;border-top:1px solid var(--border);
+                      display:flex;justify-content:space-between;align-items:center;">
+            <span id="picker-count" style="font-size:11px;color:var(--muted);">0 selected</span>
+            <button onclick="togglePicker()" style="
+              padding:4px 14px;border-radius:5px;background:var(--accent);
+              color:#000;border:none;font-weight:700;font-size:12px;cursor:pointer;">Done</button>
+          </div>
+        </div>
+      </div>
+      <!-- Hidden field consumed by parseTickers() -->
+      <input type="hidden" id="tickers-input" value="RELIANCE">
+      <label>Years of History</label>
+      <select id="years-select">
+        <option value="1">1 Year</option>
+        <option value="2">2 Years</option>
+        <option value="3">3 Years</option>
+        <option value="5" selected>5 Years</option>
+        <option value="6">6 Years</option>
+        <option value="7">7 Years</option>
+        <option value="8">8 Years</option>
+        <option value="9">9 Years</option>
+        <option value="10">10 Years</option>
+      </select>
+    </div>
+
+    <div>
+      <h2>Gate 1 — Surge + Breakdown</h2>
+      <div class="row2">
+        <div>
+          <label data-tip="Minimum surge gain %">Min Surge %</label>
+          <input type="number" id="min-gain" value="18" min="5" max="200" step="1">
+        </div>
+        <div>
+          <label data-tip="Minimum green candles in surge">Min Green</label>
+          <input type="number" id="min-green" value="2" min="1" max="20" step="1">
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label data-tip="Surge must end within N days">Recency Days</label>
+          <input type="number" id="recency" value="45" min="5" max="120" step="1">
+        </div>
+        <div>
+          <label data-tip="Min close % below prev low">Min Drop %</label>
+          <input type="number" id="min-drop" value="0.1" min="0.01" max="5" step="0.05">
+        </div>
+      </div>
+      <label data-tip="Breakdown volume / 20d avg">Min Vol Ratio</label>
+      <input type="number" id="vol-ratio" value="0.5" min="0.1" max="5" step="0.1">
+    </div>
+
+    <div>
+      <h2>Gate 2 — EMA Confirmation</h2>
+      <div class="row2">
+        <div>
+          <label>EMA Period</label>
+          <input type="number" id="ema-period" value="9" min="3" max="50" step="1">
+        </div>
+        <div>
+          <label data-tip="Same vol ratio as breakdown">Gate2 Vol Ratio</label>
+          <input type="number" id="g2-vol" value="0.5" min="0.1" max="5" step="0.1">
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2>Gate 3 — Sell Zone</h2>
+      <label data-tip="Price within X% below surge high triggers sell">Proximity %</label>
+      <input type="number" id="prox-pct" value="1.0" min="0.1" max="10" step="0.1">
+    </div>
+
+    <div>
+      <h2>Expiry Selection</h2>
+      <label data-tip="Which monthly expiry to use for CE pricing and settlement">Expiry Mode</label>
+      <select id="expiry-mode" onchange="toggleRollDays()">
+        <option value="auto" selected>Auto — roll if &lt; N days left</option>
+        <option value="current">Always Current Month</option>
+        <option value="next">Always Next Month</option>
+      </select>
+      <div id="roll-days-wrap">
+        <label data-tip="If days to current expiry &lt; this, use next month instead">Roll Threshold (days)</label>
+        <input type="number" id="roll-days" value="5" min="1" max="20" step="1">
+      </div>
+    </div>
+
+    <div>
+      <h2>💎 Premium Surge Filter</h2>
+      <label data-tip="Gate 3 volume / 20d avg. Trades at or above = High Premium setup">Vol Surge Threshold</label>
+      <input type="number" id="prem-threshold" value="1.5" min="0.5" max="10" step="0.1">
+      <div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.6;">
+        Trades where volume at Gate 3 retest ≥ this threshold are flagged as <span style="color:var(--accent);font-weight:600;">High Premium</span> setups. Results panel shows cohort accuracy comparison.
+      </div>
+    </div>
+
+    <div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px;">
+        <input type="checkbox" id="force-refresh" style="width:auto;accent-color:var(--accent);">
+        <span style="font-size:12px;color:var(--muted);">Force fresh fetch (skip cache)</span>
+      </label>
+      <button class="btn" id="run-btn" onclick="runBacktest()">▶ Run Backtest</button>
+      <div id="progress-box">
+        <span class="spinner"></span>
+        <span id="progress-msg">Fetching historical data…</span>
+      </div>
+    </div>
+
+    <div id="info-box" style="display:none;font-size:11px;color:var(--muted);line-height:1.7;">
+      <strong style="color:var(--text)">How it works</strong><br>
+      <b>Gate 1</b>: Surge ≥ min% → breakdown candle (close &lt; prev_low + volume)<br>
+      <b>Gate 2</b>: Close below 9-EMA with above-avg volume (sticky)<br>
+      <b>Gate 3</b>: Price re-tests surge high within proximity% → Sell OTM CE<br>
+      <b>Exit</b>: Hold to monthly expiry (last Thursday). WIN = CE worthless.
+      <br><br>
+      Option pricing via <b>Black-Scholes</b> using 30-day historical vol.
+    </div>
+    <button class="btn secondary" onclick="toggleInfo()" style="font-size:12px;padding:6px;">ℹ How It Works</button>
+  </div>
+
+  <!-- ─── Main ─── -->
+  <div class="main" id="main-content">
+    <div class="empty" id="empty-state">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>
+      </svg>
+      <p style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px;">No Results Yet</p>
+      <p>Configure parameters and click <strong>Run Backtest</strong> to simulate the strategy over historical data.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// Layout: sticky header + sticky sidebar + full-page natural scroll (pure CSS, no JS needed).
+
+let lastResult = null;
+
+function getConfig() {
+  return {
+    min_gain_percent:              parseFloat(document.getElementById('min-gain').value),
+    min_green_candles:             parseInt(document.getElementById('min-green').value),
+    surge_recency_days:            parseInt(document.getElementById('recency').value),
+    min_drop_percent:              parseFloat(document.getElementById('min-drop').value),
+    min_breakdown_volume_ratio:    parseFloat(document.getElementById('vol-ratio').value),
+    ema_period:                    parseInt(document.getElementById('ema-period').value),
+    price_proximity_percent:       parseFloat(document.getElementById('prox-pct').value),
+    expiry_mode:                   document.getElementById('expiry-mode').value,
+    min_days_to_expiry:            parseInt(document.getElementById('roll-days').value),
+    premium_vol_surge_threshold:   parseFloat(document.getElementById('prem-threshold').value),
+  };
+}
+
+function parseTickers(raw) {
+  return raw.trim().split(/[\s,]+/).map(t => t.toUpperCase()).filter(Boolean);
+}
+
+function toggleRollDays() {
+  const mode = document.getElementById('expiry-mode').value;
+  document.getElementById('roll-days-wrap').style.display = mode === 'auto' ? '' : 'none';
+}
+
+async function runBacktest() {
+  const tickers = parseTickers(document.getElementById('tickers-input').value);
+  if (!tickers.length) { alert('Please select at least one NSE ticker from the dropdown.'); return; }
+
+  const years  = parseInt(document.getElementById('years-select').value);
+  const config = getConfig();
+  const force  = document.getElementById('force-refresh').checked;
+
+  setRunning(true);
+  setCacheStatus('');
+  setProgress(force
+    ? `Running fresh backtest for ${tickers.join(', ')}…`
+    : `Checking cache for ${tickers.join(', ')}…`);
+
+  try {
+    const resp = await fetch('/api/backtest/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tickers, years, config, force }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: resp.statusText }));
+      throw new Error(err.error || resp.statusText);
+    }
+    const data = await resp.json();
+    lastResult = data;
+    // Show cache hit/miss badge
+    if (data.from_cache) {
+      setCacheStatus(`<span class="cache-badge hit">⚡ From Cache · ${data.cached_at || ''}</span>`);
+    } else {
+      setCacheStatus(`<span class="cache-badge miss">✦ Fresh · Saved to cache</span>`);
+    }
+    renderResults(data);
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    setRunning(false);
+  }
+}
+
+function setRunning(running) {
+  document.getElementById('run-btn').disabled = running;
+  document.getElementById('progress-box').style.display = running ? 'block' : 'none';
+}
+
+function setProgress(msg) {
+  document.getElementById('progress-msg').textContent = msg;
+}
+
+function setCacheStatus(html) {
+  const el = document.getElementById('cache-status');
+  if (el) el.innerHTML = html;
+}
+
+function showError(msg) {
+  document.getElementById('empty-state') && (document.getElementById('empty-state').remove());
+  document.getElementById('main-content').innerHTML =
+    `<div class="error-box">⚠ Error: ${msg}</div>`;
+}
+
+function toggleInfo() {
+  const b = document.getElementById('info-box');
+  b.style.display = b.style.display === 'none' ? 'block' : 'none';
+}
+
+function exportJSON() {
+  if (!lastResult) return;
+  const blob = new Blob([JSON.stringify(lastResult, null, 2)], { type: 'application/json' });
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: `backtest_${Date.now()}.json`
+  });
+  a.click();
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────────
+function renderResults(data) {
+  const agg = data.aggregate || {};
+  const per = data.per_ticker || [];
+
+  document.getElementById('export-btn').style.display = 'block';
+  document.getElementById('empty-state') && (document.getElementById('empty-state').remove());
+
+  const acc = agg.accuracy_pct || 0;
+  const pnlColor = agg.total_pnl >= 0 ? 'green' : 'red';
+
+  let html = `
+  <div class="cards">
+    <div class="card">
+      <div class="label">Accuracy</div>
+      <div class="val acc">${acc.toFixed(1)}%</div>
+    </div>
+    <div class="card">
+      <div class="label">Total Trades</div>
+      <div class="val">${agg.total_trades || 0}</div>
+    </div>
+    <div class="card">
+      <div class="label">Wins</div>
+      <div class="val green">${agg.wins || 0}</div>
+    </div>
+    <div class="card">
+      <div class="label">Losses</div>
+      <div class="val red">${agg.losses || 0}</div>
+    </div>
+    <div class="card">
+      <div class="label">Avg P&amp;L / Unit</div>
+      <div class="val ${pnlColor}">₹${(agg.avg_pnl || 0).toFixed(2)}</div>
+    </div>
+    <div class="card">
+      <div class="label">Total P&amp;L</div>
+      <div class="val ${pnlColor}">₹${(agg.total_pnl || 0).toFixed(0)}</div>
+    </div>
+  </div>
+
+  <div class="acc-bar-wrap">
+    <h3>WIN / LOSS Distribution — ${acc.toFixed(1)}% Accuracy</h3>
+    <div class="acc-bar">
+      <div class="acc-fill" style="width:${acc}%"></div>
+    </div>
+    <div class="acc-labels">
+      <span style="color:var(--green)">✅ ${agg.wins||0} Wins</span>
+      <span style="color:var(--red)">❌ ${agg.losses||0} Losses</span>
+    </div>
+  </div>`;
+
+  // ── Premium Surge analysis panel (aggregate) ──────────────────────────
+  const pa = agg.premium_analysis;
+  if (pa) {
+    const hi = pa.high_vol_cohort || {};
+    const lo = pa.normal_cohort   || {};
+    const hiAcc  = hi.accuracy_pct != null ? hi.accuracy_pct.toFixed(1) + '%' : 'N/A';
+    const loAcc  = lo.accuracy_pct != null ? lo.accuracy_pct.toFixed(1) + '%' : 'N/A';
+    const hiBar  = hi.accuracy_pct ?? 0;
+    const loBar  = lo.accuracy_pct ?? 0;
+    const hiPrem = hi.avg_premium  != null ? '₹' + hi.avg_premium.toFixed(1) : 'N/A';
+    const loPrem = lo.avg_premium  != null ? '₹' + lo.avg_premium.toFixed(1) : 'N/A';
+    const hiScore= hi.avg_prem_score != null ? hi.avg_prem_score.toFixed(1) : 'N/A';
+    const hiPnl  = hi.avg_pnl != null ? '₹' + hi.avg_pnl.toFixed(2) : 'N/A';
+    const loPnl  = lo.avg_pnl != null ? '₹' + lo.avg_pnl.toFixed(2) : 'N/A';
+    const verdict = (hi.accuracy_pct != null && lo.accuracy_pct != null)
+      ? (hi.accuracy_pct > lo.accuracy_pct
+          ? `✅ High-vol setups outperform by <strong style="color:var(--accent)">${(hi.accuracy_pct - lo.accuracy_pct).toFixed(1)}pp</strong>`
+          : (hi.accuracy_pct < lo.accuracy_pct
+              ? `⚠ Normal setups outperform high-vol by ${(lo.accuracy_pct - hi.accuracy_pct).toFixed(1)}pp`
+              : '≈ Accuracy roughly equal across both cohorts'))
+      : '';
+
+    html += `
+  <div class="prem-panel">
+    <div class="prem-panel-header">
+      <span style="font-size:18px">💎</span>
+      <h3>Premium Surge Analysis — Vol Surge ≥ ${pa.threshold}x at Gate 3</h3>
+    </div>
+    <div class="prem-panel-body">
+      <div style="font-size:12px;color:var(--muted);line-height:1.7;">
+        Each Gate 3 trade is split into two cohorts based on whether the retest candle had elevated volume
+        (vol / 20d avg ≥ ${pa.threshold}x). High-vol setups imply stronger market participation at resistance,
+        which historically correlates with richer CE premiums and firmer rejection.<br>
+        ${verdict}
+      </div>
+      <div class="dual-bar-wrap">
+        <div class="dual-bar-row">
+          <span class="dual-bar-label" style="color:var(--accent)">🔥 High-Vol</span>
+          <div class="dual-bar"><div class="dual-bar-fill" style="width:${hiBar}%;background:var(--accent)"></div></div>
+          <span class="dual-bar-val" style="color:var(--accent)">${hiAcc}</span>
+        </div>
+        <div class="dual-bar-row">
+          <span class="dual-bar-label" style="color:var(--muted)">📉 Normal</span>
+          <div class="dual-bar"><div class="dual-bar-fill" style="width:${loBar}%;background:var(--muted)"></div></div>
+          <span class="dual-bar-val" style="color:var(--muted)">${loAcc}</span>
+        </div>
+      </div>
+      <div class="cohort-grid">
+        <div class="cohort-card high">
+          <div class="cohort-title high">🔥 High-Vol Setups (≥ ${pa.threshold}x)</div>
+          <div class="cohort-stat"><span class="cohort-stat-label">Trades</span><span class="cohort-stat-val">${hi.trades ?? 0}</span></div>
+          <div class="cohort-stat"><span class="cohort-stat-label">Accuracy</span><span class="cohort-stat-val" style="color:var(--accent)">${hiAcc}</span></div>
+          <div class="cohort-stat"><span class="cohort-stat-label">Avg CE Premium</span><span class="cohort-stat-val" style="color:var(--green)">${hiPrem}</span></div>
+          <div class="cohort-stat"><span class="cohort-stat-label">Avg Premium Score</span><span class="cohort-stat-val" style="color:var(--accent)">${hiScore}</span></div>
+          <div class="cohort-stat"><span class="cohort-stat-label">Avg P&L / Unit</span><span class="cohort-stat-val" style="color:${(hi.avg_pnl||0)>=0?'var(--green)':'var(--red)'}">${hiPnl}</span></div>
+        </div>
+        <div class="cohort-card normal">
+          <div class="cohort-title normal">📉 Normal Vol Setups (&lt; ${pa.threshold}x)</div>
+          <div class="cohort-stat"><span class="cohort-stat-label">Trades</span><span class="cohort-stat-val">${lo.trades ?? 0}</span></div>
+          <div class="cohort-stat"><span class="cohort-stat-label">Accuracy</span><span class="cohort-stat-val">${loAcc}</span></div>
+          <div class="cohort-stat"><span class="cohort-stat-label">Avg CE Premium</span><span class="cohort-stat-val">${loPrem}</span></div>
+          <div class="cohort-stat"><span class="cohort-stat-label">Avg Premium Score</span><span class="cohort-stat-val">N/A</span></div>
+          <div class="cohort-stat"><span class="cohort-stat-label">Avg P&L / Unit</span><span class="cohort-stat-val" style="color:${(lo.avg_pnl||0)>=0?'var(--green)':'var(--red)'}">${loPnl}</span></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  }
+
+  // ── Dual-Expiry Comparison Panel ─────────────────────────────────────────
+  const dec = (agg.dual_expiry_comparison) || {};
+  const dCur = dec.current_month || {};
+  const dNxt = dec.next_month    || {};
+  if (dCur.trades || dNxt.trades) {
+    const cAcc  = dCur.accuracy_pct != null ? dCur.accuracy_pct.toFixed(1)+'%' : 'N/A';
+    const nAcc  = dNxt.accuracy_pct != null ? dNxt.accuracy_pct.toFixed(1)+'%' : 'N/A';
+    const cBar  = dCur.accuracy_pct ?? 0;
+    const nBar  = dNxt.accuracy_pct ?? 0;
+    const cPrem = dCur.avg_premium  != null ? '₹'+dCur.avg_premium.toFixed(1) : 'N/A';
+    const nPrem = dNxt.avg_premium  != null ? '₹'+dNxt.avg_premium.toFixed(1) : 'N/A';
+    const cPnl  = dCur.avg_pnl     != null ? '₹'+dCur.avg_pnl.toFixed(2)     : 'N/A';
+    const nPnl  = dNxt.avg_pnl     != null ? '₹'+dNxt.avg_pnl.toFixed(2)     : 'N/A';
+    const betterExp = (dCur.accuracy_pct != null && dNxt.accuracy_pct != null)
+      ? (dCur.accuracy_pct > dNxt.accuracy_pct
+          ? `🔵 Current month expiry historically more accurate by <strong style="color:var(--cur-col)">${(dCur.accuracy_pct-dNxt.accuracy_pct).toFixed(1)}pp</strong>`
+          : dNxt.accuracy_pct > dCur.accuracy_pct
+            ? `🟣 Next month expiry historically more accurate by <strong style="color:var(--nxt-col)">${(dNxt.accuracy_pct-dCur.accuracy_pct).toFixed(1)}pp</strong>`
+            : '≈ Both expiry months show equal accuracy')
+      : '';
+
+    // Count divergent trades across all tickers
+    const allTrades = (data.per_ticker || []).flatMap(r => r.trades || []);
+    const divergent = allTrades.filter(t => {
+      const cr = t.cur_expiry?.result, nr = t.nxt_expiry?.result;
+      return cr && nr && cr !== nr;
+    }).length;
+
+    html += `
+  <div class="exp-panel">
+    <div class="exp-panel-header">
+      <span style="font-size:18px">📅</span>
+      <h3>Dual-Expiry Comparison — Current Month 🔵 vs Next Month 🟣</h3>
+    </div>
+    <div class="exp-panel-body">
+      <div style="font-size:12px;color:var(--muted);line-height:1.7;">
+        Every Gate 3 trigger is evaluated for <em>both</em> the current-month and next-month NSE expiry
+        simultaneously. This shows whether selling the extra time-value of the next expiry improves accuracy
+        and P&L, or if the current month's faster decay is more reliable.
+        ${betterExp ? '<br>' + betterExp : ''}
+        ${divergent ? `  &nbsp;·&nbsp; <span class="div-pill">⚡ ${divergent} divergent trade${divergent>1?'s':''}</span> (one side WIN, other LOSS)` : ''}
+      </div>
+      <div class="dual-bar-wrap">
+        <div class="dual-bar-row">
+          <span class="dual-bar-label" style="color:var(--cur-col)">🔵 Current</span>
+          <div class="dual-bar"><div class="dual-bar-fill" style="width:${cBar}%;background:var(--cur-col)"></div></div>
+          <span class="dual-bar-val" style="color:var(--cur-col)">${cAcc}</span>
+        </div>
+        <div class="dual-bar-row">
+          <span class="dual-bar-label" style="color:var(--nxt-col)">🟣 Next</span>
+          <div class="dual-bar"><div class="dual-bar-fill" style="width:${nBar}%;background:var(--nxt-col)"></div></div>
+          <span class="dual-bar-val" style="color:var(--nxt-col)">${nAcc}</span>
+        </div>
+      </div>
+      <div class="exp-cohort-grid">
+        <div class="exp-card cur">
+          <div class="exp-card-title cur">🔵 Current Month Expiry</div>
+          <div class="exp-stat"><span class="exp-stat-label">Trades</span>       <span class="exp-stat-val">${dCur.trades??0}</span></div>
+          <div class="exp-stat"><span class="exp-stat-label">Accuracy</span>     <span class="exp-stat-val" style="color:var(--cur-col)">${cAcc}</span></div>
+          <div class="exp-stat"><span class="exp-stat-label">Avg CE Premium</span><span class="exp-stat-val" style="color:var(--green)">${cPrem}</span></div>
+          <div class="exp-stat"><span class="exp-stat-label">Avg P&L/Unit</span> <span class="exp-stat-val" style="color:${(dCur.avg_pnl||0)>=0?'var(--green)':'var(--red)'}">${cPnl}</span></div>
+          <div class="exp-stat"><span class="exp-stat-label">Total P&L</span>    <span class="exp-stat-val" style="color:${(dCur.total_pnl||0)>=0?'var(--green)':'var(--red)'}">₹${(dCur.total_pnl||0).toFixed(0)}</span></div>
+        </div>
+        <div class="exp-card nxt">
+          <div class="exp-card-title nxt">🟣 Next Month Expiry</div>
+          <div class="exp-stat"><span class="exp-stat-label">Trades</span>       <span class="exp-stat-val">${dNxt.trades??0}</span></div>
+          <div class="exp-stat"><span class="exp-stat-label">Accuracy</span>     <span class="exp-stat-val" style="color:var(--nxt-col)">${nAcc}</span></div>
+          <div class="exp-stat"><span class="exp-stat-label">Avg CE Premium</span><span class="exp-stat-val" style="color:var(--green)">${nPrem}</span></div>
+          <div class="exp-stat"><span class="exp-stat-label">Avg P&L/Unit</span> <span class="exp-stat-val" style="color:${(dNxt.avg_pnl||0)>=0?'var(--green)':'var(--red)'}">${nPnl}</span></div>
+          <div class="exp-stat"><span class="exp-stat-label">Total P&L</span>    <span class="exp-stat-val" style="color:${(dNxt.total_pnl||0)>=0?'var(--green)':'var(--red)'}">₹${(dNxt.total_pnl||0).toFixed(0)}</span></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  }
+
+  // ── Max OTM Gain Pact — Aggregate Panel ──────────────────────────────────
+  html += renderOtmPanel(agg.otm_bucket_stats, agg.recommended_otm, 'Aggregate');
+
+  for (const tkr of per) {
+    html += renderTicker(tkr);
+  }
+
+  document.getElementById('main-content').innerHTML = html;
+}
+
+// ── OTM Bucket Stats renderer (shared by aggregate + per-ticker) ──────────
+function renderOtmPanel(buckets, recommended, titlePrefix) {
+  if (!buckets || !Object.keys(buckets).length) return '';
+  const keys = Object.keys(buckets).sort((a,b) => +a - +b);
+  const bestIdx = recommended ? String(recommended.otm_idx) : null;
+
+  let rows = keys.map(k => {
+    const b   = buckets[k];
+    const isBest = k === bestIdx;
+    const evCol  = b.ev >= 0 ? 'var(--green)' : 'var(--red)';
+    const pnlCol = b.avg_pnl >= 0 ? 'var(--green)' : 'var(--red)';
+    const starBadge = isBest
+      ? `<span style="background:rgba(240,136,62,.18);color:var(--accent);border:1px solid rgba(240,136,62,.4);
+             border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:6px;">★ EV Best</span>`
+      : '';
+    return `<tr style="${isBest ? 'background:rgba(240,136,62,.07)' : ''}">
+      <td style="font-weight:700">${b.label}${starBadge}</td>
+      <td>${b.trades}</td>
+      <td style="color:${b.win_rate >= 60 ? 'var(--green)' : b.win_rate >= 40 ? 'var(--accent)' : 'var(--red)'}">
+        ${b.win_rate.toFixed(1)}%</td>
+      <td style="color:var(--green)">₹${b.avg_premium.toFixed(2)}</td>
+      <td style="color:${pnlCol}">₹${b.avg_pnl.toFixed(2)}</td>
+      <td style="color:${evCol};font-weight:700">₹${b.ev.toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+
+  const recLine = recommended
+    ? `<span style="color:var(--accent);font-weight:700">${recommended.label}</span>
+       &nbsp;→&nbsp;EV ₹${(recommended.ev||0).toFixed(2)}
+       &nbsp;·&nbsp;Win% ${recommended.win_rate ?? '?'}%
+       &nbsp;·&nbsp;Avg Prem ₹${(recommended.avg_premium||0).toFixed(2)}`
+    : '—';
+
+  return `
+  <div class="prem-panel" style="margin-top:12px">
+    <div class="prem-panel-header">
+      <span style="font-size:18px">🎯</span>
+      <h3>${titlePrefix} — Max OTM Gain Pact</h3>
+    </div>
+    <div class="prem-panel-body">
+      <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px">
+        Every Gate 3 trade is evaluated at each OTM offset (+1, +2, +3) simultaneously using Black-Scholes
+        pricing and the actual expiry close. <strong style="color:var(--text)">EV = avg_premium × win_rate</strong>
+        — the offset with the highest EV is the historically optimal strike to sell.<br>
+        <span style="color:var(--accent)">★ Recommended offset for this run: ${recLine}</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr>
+            <th style="text-align:left;padding:6px 10px;background:var(--surface2);color:var(--muted)">Strike offset</th>
+            <th style="text-align:left;padding:6px 10px;background:var(--surface2);color:var(--muted)">Trades</th>
+            <th style="text-align:left;padding:6px 10px;background:var(--surface2);color:var(--muted)">Win%</th>
+            <th style="text-align:left;padding:6px 10px;background:var(--surface2);color:var(--muted)">Avg Premium</th>
+            <th style="text-align:left;padding:6px 10px;background:var(--surface2);color:var(--muted)">Avg P&L/unit</th>
+            <th style="text-align:left;padding:6px 10px;background:var(--surface2);color:var(--muted)">EV (₹) ▸</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function renderTicker(tkr) {
+  const s   = tkr.summary || {};
+  const err = tkr.error;
+  const acc = s.accuracy_pct || 0;
+  const uid = tkr.ticker.replace(/[^a-z0-9]/gi, '');
+
+  if (err) {
+    return `<div class="ticker-section">
+      <div class="ticker-header"><h3>${tkr.ticker}</h3><span class="badge loss">Error</span></div>
+      <div style="padding:16px;color:var(--red);">${err}</div></div>`;
+  }
+  if (!tkr.trades || !tkr.trades.length) {
+    return `<div class="ticker-section">
+      <div class="ticker-header"><h3>${tkr.ticker}</h3>
+        <span class="badge" style="background:var(--surface);color:var(--muted)">0 Trades</span></div>
+      <div style="padding:16px;color:var(--muted);">No 3-gate signals found (${tkr.data_from} → ${tkr.data_to}).</div>
+    </div>`;
+  }
+
+  // ── Per-ticker analysis summaries ─────────────────────────────────────────
+  const tpa  = tkr.premium_analysis     || {};
+  const thi  = tpa.high_vol_cohort      || {};
+  const tlo  = tpa.normal_cohort        || {};
+  const thr  = tpa.threshold ?? 1.5;
+  const tdec = tkr.dual_expiry_comparison || {};
+  const tCur = tdec.current_month       || {};
+  const tNxt = tdec.next_month          || {};
+  // Max OTM Gain Pact per-ticker
+  const tOtmBuckets = s.otm_bucket_stats  || null;
+  const tOtmRec     = s.recommended_otm   || null;
+
+  // ── Build rows ─────────────────────────────────────────────────────────────
+  const rows = tkr.trades.map(t => {
+    const cur = t.cur_expiry || {};
+    const nxt = t.nxt_expiry || {};
+    const cWin = cur.result === 'WIN';
+    const nWin = nxt.result === 'WIN';
+    const isDivergent = cur.result && nxt.result && cur.result !== nxt.result;
+    const isHiPr = t.is_high_prem === true;
+
+    // row class: primary = cur_expiry result; flag divergent
+    const rowClass = [
+      cur.result ? (cWin ? 'cur-win' : 'cur-loss') : (t.result==='WIN' ? 'win' : 'loss'),
+      isDivergent ? 'divergent' : '',
+      isHiPr     ? 'high-prem' : '',
+    ].filter(Boolean).join(' ');
+
+    const tradeJson = encodeURIComponent(JSON.stringify(t));
+
+    // Vol@G3
+    const vs = t.vol_surge_at_g3;
+    const vsHtml = vs != null
+      ? `<span class="${vs >= thr ? 'vol-surge-hi' : 'vol-surge-lo'}">${vs.toFixed(2)}x${isHiPr ? ' 🔥' : ''}</span>`
+      : '<span style="color:var(--muted)">—</span>';
+
+    // Premium score
+    const ps = t.premium_score;
+    const psHtml = ps != null
+      ? (isHiPr ? `<span class="prem-score-pill">${ps.toFixed(1)}</span>`
+                : `<span style="color:var(--muted);font-size:11px">${ps.toFixed(1)}</span>`)
+      : '<span style="color:var(--muted)">—</span>';
+
+    // OTM label badge
+    const otmLabel = t.otm_label || '+1 OTM';
+    const otmIdx   = t.otm_idx   || 1;
+    const otmColor = otmIdx === 1 ? 'var(--muted)' : otmIdx === 2 ? 'var(--accent)' : 'var(--green)';
+    const otmHtml  = `<span style="font-size:10px;font-weight:700;color:${otmColor};
+      background:rgba(255,255,255,0.06);border-radius:8px;padding:1px 6px">${otmLabel}</span>`;
+
+    // BCS inline cell
+    const bcsNet   = t.bcs_net_premium;
+    const bcsML    = t.bcs_max_loss;
+    const bcsRR    = t.bcs_risk_reward;
+    const bcsHedge = t.bcs_hedge_strike;
+    const bcsShort = t.strike;            // the CE we SELL = primary strike
+    const bcsBE    = t.bcs_breakeven;
+    let bcsHtml = '<span style="color:var(--muted);font-size:10px">—</span>';
+    if (bcsNet != null && bcsNet > 0 && bcsML != null) {
+      const rrStr = bcsRR != null ? `1:${bcsRR}` : '—';
+      const beStr = bcsBE != null ? `₹${bcsBE}` : '—';
+      bcsHtml = `<span style="font-size:10px;line-height:1.8;display:inline-block">
+        <span style="color:var(--red);font-weight:700">SELL ₹${bcsShort} CE</span><br>
+        <span style="color:var(--green);font-weight:700">BUY &nbsp;₹${bcsHedge} CE</span><br>
+        <span style="color:var(--text)">Net&nbsp;&nbsp;₹${bcsNet}</span><br>
+        <span style="color:var(--red)">MaxL ₹${bcsML}</span><br>
+        <span style="color:var(--muted)">BE&nbsp;&nbsp;&nbsp;${beStr}</span><br>
+        <span style="color:var(--muted)">R:R&nbsp;&nbsp;${rrStr}</span>
+      </span>`;
+    }
+
+    // Helper: render one expiry-side block
+    function sideCell(side, isWin, tagCls, tdBase) {
+      if (!side || !side.result) {
+        return `<td class="${tdBase}" colspan="5" style="color:var(--muted);text-align:center">—</td>`;
+      }
+      const pnlCol = side.pnl_per_unit >= 0 ? 'var(--green)' : 'var(--red)';
+      const retCol = side.return_pct   >= 0 ? 'var(--green)' : 'var(--red)';
+      const resTd  = isWin ? 'td-' + tdBase.split('-')[1] + '-win' : 'td-' + tdBase.split('-')[1] + '-loss';
+      return `
+        <td class="${tdBase}">₹${side.entry_ce_premium}</td>
+        <td class="${tdBase}">${side.expiry_date} <span style="font-size:10px;color:var(--muted)">${side.T_days}d</span></td>
+        <td class="${tdBase}">₹${side.expiry_close}</td>
+        <td class="${resTd}"><span class="${tagCls}">${side.result}</span></td>
+        <td class="${tdBase}" style="color:${pnlCol}">₹${side.pnl_per_unit}
+          <span style="color:${retCol};font-size:10px;margin-left:2px">(${side.return_pct}%)</span></td>`;
+    }
+
+    const divBadge = isDivergent
+      ? `<span class="div-pill" title="Current: ${cur.result} / Next: ${nxt.result}">⚡ Div</span>`
+      : '';
+
+    return `<tr class="${rowClass}"
+               data-high-prem="${isHiPr}"
+               data-cur-res="${cur.result||''}"
+               data-nxt-res="${nxt.result||''}"
+               onclick="openTradeChart(decodeURIComponent('${tradeJson}'))"
+               title="Click for chart · ${isDivergent ? 'DIVERGENT: Cur='+cur.result+' Nxt='+nxt.result : (cur.result||'')+'/'+(nxt.result||'')}">
+      <td>${t.gate1_date}</td>
+      <td>${t.gate2_date}</td>
+      <td>${t.gate3_date} ${divBadge}</td>
+      <td>₹${t.surge_high}</td>
+      <td>₹${t.strike}<br>${otmHtml}</td>
+      <td>₹${t.entry_price}</td>
+      <td>${t.iv_sigma}%</td>
+      <td>${vsHtml}</td>
+      <td>${psHtml}</td>
+      <td style="min-width:90px">${bcsHtml}</td>
+      ${sideCell(cur, cWin, 'tag-cur-' + (cWin?'win':'loss'), 'td-cur')}
+      ${sideCell(nxt, nWin, 'tag-nxt-' + (nWin?'win':'loss'), 'td-nxt')}
+    </tr>`;
+  }).join('');
+
+  // ── Header bar mini-summary ────────────────────────────────────────────────
+  const cAcc = tCur.accuracy_pct != null ? tCur.accuracy_pct.toFixed(1)+'%' : '—';
+  const nAcc = tNxt.accuracy_pct != null ? tNxt.accuracy_pct.toFixed(1)+'%' : '—';
+  const divCount = tkr.trades.filter(t => {
+    const cr = t.cur_expiry?.result, nr = t.nxt_expiry?.result;
+    return cr && nr && cr !== nr;
+  }).length;
+
+  // Premium mini info
+  const thiAcc  = thi.accuracy_pct != null ? thi.accuracy_pct.toFixed(1)+'%' : '—';
+  const tloAcc  = tlo.accuracy_pct != null ? tlo.accuracy_pct.toFixed(1)+'%' : '—';
+
+  return `<div class="ticker-section">
+    <div class="ticker-header" onclick="toggleSection(this)">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0">
+        <h3 style="margin:0">${tkr.ticker}
+          <small style="font-weight:400;color:var(--muted);font-size:12px;">${tkr.data_from} → ${tkr.data_to}</small>
+        </h3>
+        <span style="font-size:11px;color:var(--muted);">
+          🔵 Cur: <span style="color:var(--cur-col);font-weight:700">${cAcc}</span>
+          &nbsp;·&nbsp;
+          🟣 Nxt: <span style="color:var(--nxt-col);font-weight:700">${nAcc}</span>
+          ${divCount ? `&nbsp;·&nbsp;<span class="div-pill">⚡ ${divCount} div</span>` : ''}
+          ${thi.trades ? `&nbsp;·&nbsp;💎 H-Vol: <span style="color:var(--accent)">${thiAcc}</span>` : ''}
+          ${tOtmRec ? `&nbsp;·&nbsp;🎯 OTM Best: <span style="color:var(--accent);font-weight:700">${tOtmRec.label}</span> EV ₹${(tOtmRec.ev||0).toFixed(1)}` : ''}
+        </span>
+      </div>
+      <div class="ticker-stats">
+        <span><span class="badge win">${s.wins||0} WIN</span></span>
+        <span><span class="badge loss">${s.losses||0} LOSS</span></span>
+        <span style="color:var(--accent);font-weight:700;">${acc.toFixed(1)}%</span>
+        <span style="color:var(--muted);">Avg CE ₹${(s.avg_premium||0).toFixed(1)}</span>
+        <span style="color:var(--muted)">▾</span>
+      </div>
+    </div>
+    <div class="ticker-body" style="display:none">
+      ${tOtmBuckets ? renderOtmPanel(tOtmBuckets, tOtmRec, tkr.ticker) : ''}
+      <div class="filter-row" style="padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface2);flex-wrap:wrap;">
+        <span style="font-size:11px;color:var(--muted);">Filter:</span>
+        <button class="filter-chip active" id="fc-all-${uid}"  onclick="filterTrades('${uid}','all')">All (${tkr.trades.length})</button>
+        <button class="filter-chip" id="fc-cwin-${uid}"  onclick="filterTrades('${uid}','cwin')" style="border-color:rgba(56,189,248,0.4);color:var(--cur-col)">🔵 Cur-WIN (${tCur.wins||0})</button>
+        <button class="filter-chip" id="fc-nwin-${uid}"  onclick="filterTrades('${uid}','nwin')" style="border-color:rgba(167,139,250,0.4);color:var(--nxt-col)">🟣 Nxt-WIN (${tNxt.wins||0})</button>
+        <button class="filter-chip" id="fc-div-${uid}"   onclick="filterTrades('${uid}','div')"  style="border-color:rgba(167,139,250,0.4)">⚡ Divergent (${divCount})</button>
+        <button class="filter-chip" id="fc-hi-${uid}"    onclick="filterTrades('${uid}','hi')"   style="border-color:rgba(240,136,62,0.4)">🔥 High-Vol (${thi.trades||0})</button>
+      </div>
+      <table id="table-${uid}">
+        <thead>
+          <tr>
+            <th rowspan="2">Gate 1</th>
+            <th rowspan="2">Gate 2</th>
+            <th rowspan="2">Gate 3 Entry</th>
+            <th rowspan="2">Surge High</th>
+            <th rowspan="2">Strike / OTM</th>
+            <th rowspan="2">Entry Price</th>
+            <th rowspan="2">HV(σ)</th>
+            <th rowspan="2" title="Vol at G3 / 20d avg">Vol@G3</th>
+            <th rowspan="2" title="Vol Surge × CE Prem">Score 💎</th>
+            <th rowspan="2" title="Bear Call Spread — SELL short strike CE + BUY hedge CE one interval higher. Shows both legs, net credit, max loss, breakeven, R:R">BCS 🛡</th>
+            <th colspan="5" class="th-cur">🔵 CURRENT MONTH EXPIRY</th>
+            <th colspan="5" class="th-nxt">🟣 NEXT MONTH EXPIRY</th>
+          </tr>
+          <tr>
+            <th class="th-cur">CE Prem</th>
+            <th class="th-cur">Expiry Date</th>
+            <th class="th-cur">Exp Close</th>
+            <th class="th-cur">Result</th>
+            <th class="th-cur">P&L / Ret%</th>
+            <th class="th-nxt">CE Prem</th>
+            <th class="th-nxt">Expiry Date</th>
+            <th class="th-nxt">Exp Close</th>
+            <th class="th-nxt">Result</th>
+            <th class="th-nxt">P&L / Ret%</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-${uid}">${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function filterTrades(uid, mode) {
+  const tbody = document.getElementById('tbody-' + uid);
+  if (!tbody) return;
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const isHi  = tr.dataset.highPrem === 'true';
+    const cRes  = tr.dataset.curRes;
+    const nRes  = tr.dataset.nxtRes;
+    const isDiv = cRes && nRes && cRes !== nRes;
+    let show = true;
+    if      (mode === 'cwin') show = cRes === 'WIN';
+    else if (mode === 'nwin') show = nRes === 'WIN';
+    else if (mode === 'div')  show = isDiv;
+    else if (mode === 'hi')   show = isHi;
+    tr.style.display = show ? '' : 'none';
+  });
+  ['all','cwin','nwin','div','hi'].forEach(m => {
+    const chip = document.getElementById('fc-' + m + '-' + uid);
+    if (chip) chip.classList.toggle('active', m === mode);
+  });
+}
+
+function toggleSection(header) {
+  const body = header.nextElementSibling;
+  const arrow = header.querySelector('.ticker-stats span:last-child');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : '';
+  if (arrow) arrow.textContent = isOpen ? '▾' : '▴';
+}
+
+// ── Chart Modal ──────────────────────────────────────────────────────────────
+function openTradeChart(tradeJson) {
+  const t = JSON.parse(tradeJson);
+  document.getElementById('chart-modal').classList.add('open');
+  document.getElementById('chart-title').textContent =
+    `${t.ticker}  —  Gate 3 Entry ${t.gate3_date}  (${t.result})`;
+  document.getElementById('chart-meta').textContent =
+    `Surge High ₹${t.surge_high}  |  Strike ₹${t.strike}  |  CE Premium ₹${t.entry_ce_premium}  |  Expiry ${t.expiry_date}`;
+  document.getElementById('chart-loading').style.display = 'block';
+  document.getElementById('trade-canvas').style.display  = 'none';
+
+  // fetch ~30 days before gate1 through expiry + 5 days
+  const from = offsetDate(t.gate1_date, -30);
+  const to   = offsetDate(t.expiry_date,  5);
+  fetch(`/api/backtest/candles?ticker=${t.ticker}&from_date=${from}&to_date=${to}`)
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('chart-loading').style.display = 'none';
+      if (d.error || !d.candles || !d.candles.length) {
+        document.getElementById('chart-loading').textContent = '⚠ ' + (d.error || 'No data');
+        document.getElementById('chart-loading').style.display = 'block';
+        return;
+      }
+      drawChart(d.candles, t);
+    })
+    .catch(e => {
+      document.getElementById('chart-loading').textContent = '⚠ ' + e.message;
+      document.getElementById('chart-loading').style.display = 'block';
+    });
+}
+
+function closeModal() {
+  document.getElementById('chart-modal').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function offsetDate(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function drawChart(candles, t) {
+  const canvas = document.getElementById('trade-canvas');
+  const wrap   = document.getElementById('chart-wrap');
+  const dpr    = window.devicePixelRatio || 1;
+
+  // sizing
+  const W = Math.min(wrap.clientWidth - 32, 940);
+  const H = 480;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.display = 'block';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  // layout
+  const PAD_L = 72, PAD_R = 16, PAD_T = 28, PAD_B = 60;
+  const CHART_H_FRAC = 0.72;  // price area = 72% of plot height
+  const plotW = W - PAD_L - PAD_R;
+  const plotH = H - PAD_T - PAD_B;
+  const priceH = plotH * CHART_H_FRAC;
+  const volH   = plotH * (1 - CHART_H_FRAC) - 8;
+  const volY0  = PAD_T + priceH + 8;
+
+  // price range
+  const highs  = candles.map(c => c.high);
+  const lows   = candles.map(c => c.low);
+  const vols   = candles.map(c => c.volume);
+  let pMin = Math.min(...lows)  * 0.993;
+  let pMax = Math.max(...highs) * 1.007;
+  // ensure surge_high and strike are in view
+  pMin = Math.min(pMin, t.strike * 0.993);
+  pMax = Math.max(pMax, t.surge_high * 1.007);
+  const pRange = pMax - pMin;
+  const maxVol = Math.max(...vols);
+
+  const n = candles.length;
+  const candleW  = Math.max(2, Math.min(14, Math.floor(plotW / n) - 1));
+  const candleGap = Math.floor(plotW / n);
+
+  // helpers
+  const px = i => PAD_L + i * candleGap + candleGap / 2;
+  const py = p => PAD_T + priceH - ((p - pMin) / pRange) * priceH;
+
+  // ── background ──
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── grid lines ──
+  const TICKS = 6;
+  ctx.strokeStyle = '#21262d';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= TICKS; i++) {
+    const y = PAD_T + (priceH / TICKS) * i;
+    ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R, y); ctx.stroke();
+  }
+
+  // ── price axis labels ──
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '10px Segoe UI, system-ui, sans-serif';
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= TICKS; i++) {
+    const p = pMax - (pRange / TICKS) * i;
+    const y = PAD_T + (priceH / TICKS) * i;
+    ctx.fillText('₹' + p.toFixed(0), PAD_L - 4, y + 3);
+  }
+
+  // ── surge_high horizontal line ──
+  drawHLine(ctx, py(t.surge_high), PAD_L, W - PAD_R, '#f0883e', [6,4],
+            '↑ Surge High ₹' + t.surge_high, W - PAD_R - 2, 'right');
+
+  // ── strike horizontal line ──
+  drawHLine(ctx, py(t.strike), PAD_L, W - PAD_R, '#f85149', [4,4],
+            '▶ Strike ₹' + t.strike, PAD_L + 4, 'left');
+
+  // ── gate vertical markers ──
+  const markers = [
+    { date: t.gate1_date,  label: 'G1',     color: '#58a6ff' },
+    { date: t.gate2_date,  label: 'G2',     color: '#d2a8ff' },
+    { date: t.gate3_date,  label: 'G3 Entry', color: '#3fb950' },
+    { date: t.expiry_date, label: 'Expiry', color: '#f85149' },
+  ];
+  const dateIndex = {};
+  candles.forEach((c, i) => { dateIndex[c.date] = i; });
+
+  markers.forEach(m => {
+    const idx = dateIndex[m.date];
+    if (idx === undefined) return;
+    const x = px(idx);
+    ctx.save();
+    ctx.strokeStyle = m.color;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x, PAD_T);
+    ctx.lineTo(x, PAD_T + priceH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // label at top
+    ctx.fillStyle = m.color;
+    ctx.font = 'bold 10px Segoe UI, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(m.label, x, PAD_T - 6);
+  });
+
+  // ── entry price dot ──
+  const g3idx = dateIndex[t.gate3_date];
+  if (g3idx !== undefined) {
+    ctx.fillStyle = '#3fb950';
+    ctx.beginPath();
+    ctx.arc(px(g3idx), py(t.entry_price), 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ── candlesticks ──
+  candles.forEach((c, i) => {
+    const x   = px(i);
+    const isUp = c.close >= c.open;
+    const col  = isUp ? '#3fb950' : '#f85149';
+    const yHi  = py(c.high);
+    const yLo  = py(c.low);
+    const yO   = py(c.open);
+    const yC   = py(c.close);
+
+    // wick
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, yHi);
+    ctx.lineTo(x, yLo);
+    ctx.stroke();
+
+    // body
+    const bodyTop = Math.min(yO, yC);
+    const bodyH   = Math.max(1, Math.abs(yC - yO));
+    ctx.fillStyle = col;
+    ctx.fillRect(x - candleW / 2, bodyTop, candleW, bodyH);
+  });
+
+  // ── volume bars ──
+  candles.forEach((c, i) => {
+    const x   = px(i);
+    const isUp = c.close >= c.open;
+    const barH = (c.volume / maxVol) * volH;
+    ctx.fillStyle = isUp ? 'rgba(63,185,80,.45)' : 'rgba(248,81,73,.45)';
+    ctx.fillRect(x - candleW / 2, volY0 + volH - barH, candleW, barH);
+  });
+
+  // ── x-axis date labels ──
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '10px Segoe UI, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  const labelEvery = Math.ceil(n / 12);
+  candles.forEach((c, i) => {
+    if (i % labelEvery !== 0) return;
+    const x = px(i);
+    // short date: e.g. "26 Jul"
+    const d = new Date(c.date);
+    const lbl = d.getDate() + ' ' + d.toLocaleString('en-IN',{month:'short'});
+    ctx.save();
+    ctx.translate(x, H - PAD_B + 14);
+    ctx.rotate(-Math.PI / 4);
+    ctx.fillText(lbl, 0, 0);
+    ctx.restore();
+  });
+
+  // ── border around price area ──
+  ctx.strokeStyle = '#30363d';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  ctx.strokeRect(PAD_L, PAD_T, plotW, priceH);
+}
+
+function drawHLine(ctx, y, x0, x1, color, dash, label, labelX, align) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash(dash);
+  ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = color;
+  ctx.font = '10px Segoe UI, system-ui, sans-serif';
+  ctx.textAlign = align;
+  ctx.fillText(label, labelX, y - 3);
+  ctx.restore();
+}
+
+// ── Ticker Picker ─────────────────────────────────────────────────────────────
+const NSE_TICKERS = {
+  "Banking & Finance": [
+    ["HDFCBANK","HDFC Bank"],["ICICIBANK","ICICI Bank"],["KOTAKBANK","Kotak Mahindra Bank"],
+    ["AXISBANK","Axis Bank"],["SBIN","State Bank of India"],["BANKBARODA","Bank of Baroda"],
+    ["CANBK","Canara Bank"],["PNB","Punjab National Bank"],["INDUSINDBK","IndusInd Bank"],
+    ["FEDERALBNK","Federal Bank"],["IDFCFIRSTB","IDFC First Bank"],["AUBANK","AU Small Finance"],
+    ["BANDHANBNK","Bandhan Bank"],["RBLBANK","RBL Bank"],["YESBANK","Yes Bank"],
+    ["HDFCAMC","HDFC AMC"],["MUTHOOTFIN","Muthoot Finance"],["BAJFINANCE","Bajaj Finance"],
+    ["BAJAJFINSV","Bajaj Finserv"],["CHOLAFIN","Cholamandalam Finance"],
+    ["M&MFIN","M&M Financial"],["MANAPPURAM","Manappuram Finance"],["LICHSGFIN","LIC Housing Finance"],
+    ["SBICARD","SBI Cards"],["PNBHOUSING","PNB Housing Finance"],["ICICIGI","ICICI General Ins."],
+    ["SBILIFE","SBI Life Insurance"],["HDFCLIFE","HDFC Life Insurance"],
+    ["NAUKRI","Info Edge (Naukri)"],["BSE","BSE Ltd"],["SHRIRAMFIN","SHRIRAMFIN"]
+  ],
+  "IT & Technology": [
+    ["TCS","Tata Consultancy Services"],["INFY","Infosys"],["WIPRO","Wipro"],
+    ["HCLTECH","HCL Technologies"],["TECHM","Tech Mahindra"],["LTIM","LTIMindtree"],
+    ["MPHASIS","Mphasis"],["COFORGE","Coforge"],["PERSISTENT","Persistent Systems"],
+    ["KPITTECH","KPIT Technologies"],["OFSS","Oracle Financial Services"],
+    ["BSOFT","Birlasoft"],["NIIT","NIIT Technologies"],["RATEGAIN","RateGain Travel"],
+    ["TATAELXSI","Tata Elxsi"],["ZENSARTECH","Zensar Technologies"],
+    ["MASTEK","Mastek"],["HEXAWARE","Hexaware"],["SONATSOFTW","Sonata Software"],
+  ],
+  "Oil, Gas & Energy": [
+    ["RELIANCE","Reliance Industries"],["ONGC","Oil & Natural Gas Corp"],
+    ["BPCL","Bharat Petroleum"],["IOC","Indian Oil Corp"],["HINDPETRO","HPCL"],
+    ["GAIL","GAIL (India)"],["IGL","Indraprastha Gas"],["MGL","Mahanagar Gas"],
+    ["PETRONET","Petronet LNG"],["GSPL","Gujarat State Petronet"],
+    ["OIL","Oil India"],["MRPL","MRPL"],
+    ["ADANIENT","Adani Enterprises"],["ADANIGREEN","Adani Green Energy"],["ADANIPOWER","Adani Power"],
+    ["ADANIPORTS","Adani Ports"],["ADANITRANS","Adani Transmission"],
+    ["TATAPOWER","Tata Power"],["TORNTPOWER","Torrent Power"],["NTPC","NTPC"],
+    ["POWERGRID","Power Grid Corp"],["NHPC","NHPC"],["SJVN","SJVN"],
+    ["COALINDIA","Coal India"],["CESC","CESC"],["JSWENERGY","JSW Energy"],["POWERINDIA","POWERINDIA"],["CGPOWER","CGPOWER"],
+  ],
+  "FMCG & Consumer": [
+    ["HINDUNILVR","Hindustan Unilever"],["ITC","ITC"],["NESTLEIND","Nestlé India"],
+    ["BRITANNIA","Britannia Industries"],["DABUR","Dabur India"],["GODREJCP","Godrej Consumer"],
+    ["MARICO","Marico"],["COLPAL","Colgate-Palmolive"],["EMAMILTD","Emami"],
+    ["TATACONSUM","Tata Consumer"],["UBL","United Breweries"],["MCDOWELL-N","United Spirits"],
+    ["VBL","Varun Beverages"],["RADICO","Radico Khaitan"],["PGHH","P&G Hygiene"],
+    ["JUBLINGREA","Jubilant Ingrevia"],["JUBLPHARMA","Jubilant Pharma"],
+    ["PATANJALI","Patanjali Foods"],["BIKAJI","Bikaji Foods"],
+    ["ZOMATO","Zomato"],["SWIGGY","Swiggy"],
+  ],
+  "Automobile": [
+    ["MARUTI","Maruti Suzuki"],["M&M","Mahindra & Mahindra"],["TATAMOTORS","Tata Motors"],
+    ["BAJAJ-AUTO","Bajaj Auto"],["HEROMOTOCO","Hero MotoCorp"],["EICHERMOT","Eicher Motors"],
+    ["ASHOKLEY","Ashok Leyland"],["TVSMOTOR","TVS Motor"],["ESCORTS","Escorts Kubota"],
+    ["BALKRISIND","Balkrishna Industries"],["APOLLOTYRE","Apollo Tyres"],
+    ["MOTHERSON","Samvardhana Motherson"],["BOSCH","Bosch"],["MINDA","Uno Minda"],
+    ["CRAFTSMAN","Craftsman Auto"],["TIINDIA","Tube Investments"],
+    ["EXIDEIND","Exide Industries"],["AMARA RAJA","Amara Raja Energy"],["ENDURANCE","Endurance Tech"],["MRF","MRF"],["BHARATFORG","BHARATFORG"],["BOSCHLTD","BOSCHLTD"],["TMPV","TMPV"]
+  ],
+  "Pharma & Healthcare": [
+    ["SUNPHARMA","Sun Pharmaceutical"],["DRREDDY","Dr. Reddy's Labs"],["CIPLA","Cipla"],
+    ["DIVISLAB","Divi's Laboratories"],["AUROPHARMA","Aurobindo Pharma"],
+    ["BIOCON","Biocon"],["LUPIN","Lupin"],["ALKEM","Alkem Laboratories"],
+    ["TORNTPHARM","Torrent Pharmaceuticals"],["GLENMARK","Glenmark Pharma"],
+    ["IPCALAB","IPCA Laboratories"],["NATCOPHARM","Natco Pharma"],
+    ["AJANTPHARM","Ajanta Pharma"],["ABBOTINDIA","Abbott India"],
+    ["PFIZER","Pfizer India"],["SANOFI","Sanofi India"],
+    ["APOLLOHOSP","Apollo Hospitals"],["FORTIS","Fortis Healthcare"],["MAXHEALTH","Max Healthcare"],
+    ["METROPOLIS","Metropolis Healthcare"],["LALPATHLAB","Dr. Lal PathLabs"],
+  ],
+  "Metals & Mining": [
+    ["TATASTEEL","Tata Steel"],["JSWSTEEL","JSW Steel"],["HINDALCO","Hindalco Industries"],
+    ["VEDL","Vedanta"],["SAIL","Steel Authority of India"],["NMDC","NMDC"],
+    ["NATIONALUM","National Aluminium"],["WELCORP","Welspun Corp"],["JINDALSTEL","Jindal Steel"],
+    ["JSWISPAT","JSW Ispat"],["MOIL","MOIL"],["HINDZINC","Hindustan Zinc"],
+    ["APL","APL Apollo Tubes"],["RATNAMANI","Ratnamani Metals"],
+  ],
+  "Capital Goods & Infra": [
+    ["LT","Larsen & Toubro"],["SIEMENS","Siemens India"],["ABB","ABB India"],
+    ["BHEL","BHEL"],["THERMAX","Thermax"],["CUMMINSIND","Cummins India"],
+    ["HAVELLS","Havells India"],["VOLTAS","Voltas"],["BLUESTARCO","Blue Star"],
+    ["KECL","KEC International"],["KALPATPOWR","Kalpataru Power"],["PFC","Power Finance Corp"],
+    ["RECLTD","REC Ltd"],["IRFC","Indian Railway Finance Corp"],
+    ["GMRINFRA","GMR Airports"],["IRB","IRB Infrastructure"],["AHLUCONT","Ahluwalia Contracts"],
+    ["NCC","NCC"],["NBCC","NBCC India"],["RVNL","Rail Vikas Nigam"],
+    ["IRCON","IRCON International"],["HGINFRA","H.G. Infra Engg."],["POWERINDIA","POWERINDIA"],["ABCAPITAL","ABCAPITAL"],
+  ],
+  "Cement": [
+    ["ULTRACEMCO","UltraTech Cement"],["SHREECEM","Shree Cement"],
+    ["AMBUJACEM","Ambuja Cements"],["ACC","ACC"],["DALMIACEM","Dalmia Bharat Cement"],
+    ["RAMCOCEM","Ramco Cements"],["JKCEMENT","JK Cement"],["HEIDELBERG","Heidelberg Cement"],
+    ["BIRLACORPN","Birla Corporation"],["JKLAKSHMI","JK Lakshmi Cement"],
+  ],
+  "Chemicals & Agri": [
+    ["PIDILITIND","Pidilite Industries"],["ASIANPAINT","Asian Paints"],
+    ["BERGER","Berger Paints"],["KANSAINER","Kansai Nerolac"],
+    ["UPL","UPL"],["PI","PI Industries"],["COROMANDEL","Coromandel International"],
+    ["CHAMBLFERT","Chambal Fertilisers"],["GNFC","GNFC"],["DEEPAKNTR","Deepak Nitrite"],
+    ["ALKYLAMINE","Alkyl Amines"],["FINEORG","Fine Organic"],["NAVINFLUOR","Navin Fluorine"],
+    ["GUJGASLTD","Gujarat Gas"],["ATGL","Adani Total Gas"],
+  ],
+  "Real Estate & Retail": [
+    ["DLF","DLF"],["GODREJPROP","Godrej Properties"],["OBEROIRLTY","Oberoi Realty"],
+    ["PRESTIGE","Prestige Estates"],["BRIGADE","Brigade Enterprises"],
+    ["PHOENIXLTD","Phoenix Mills"],["NYKAA","FSN E-Commerce (Nykaa)"],
+    ["TRENT","Trent"],["DMART","Avenue Supermarts"],["SHOPERSTOP","Shoppers Stop"],
+    ["RELAXO","Relaxo Footwears"],["BATAINDIA","Bata India"],["VMART","V-Mart Retail"],["LODHA","Lodha Developers"],
+  ],
+  "Telecom & Media": [
+    ["BHARTIARTL","Bharti Airtel"],["IDEA","Vodafone Idea"],
+    ["INDUSTOWER","Indus Towers"],["HFCL","HFCL"],
+    ["ZEEL","Zee Entertainment"],["SUNTV","Sun TV"],["PVRINOX","PVR INOX"],
+    ["INOXWIND","Inox Wind"],
+  ],
+  "Conglomerate & Others": [
+    ["TITAN","Titan Company"],["TATACOMM","Tata Communications"],
+    ["TATACHEM","Tata Chemicals"],["TATAELXSI","Tata Elxsi"],
+    ["IEX","Indian Energy Exchange"],["CDSL","CDSL"],["MCX","Multi Commodity Exchange"],
+    ["IRCTC","IRCTC"],["HAL","Hindustan Aeronautics"],["BEL","Bharat Electronics"],
+    ["POLICYBZR","PB Fintech (PolicyBazaar)"],["PAYTM","Paytm"],
+    ["DELHIVERY","Delhivery"],["INDIAMART","IndiaMART InterMESH"],
+  ],
+};
+
+const PRESETS = {
+  nifty50top: ["RELIANCE","TCS","HDFCBANK","ICICIBANK","INFY","LT","KOTAKBANK",
+               "HINDUNILVR","AXISBANK","BHARTIARTL","BAJFINANCE","ASIANPAINT",
+               "MARUTI","TITAN","WIPRO","NESTLEIND","ONGC","ULTRACEMCO","M&M","ITC"],
+  banking:    ["HDFCBANK","ICICIBANK","KOTAKBANK","AXISBANK","SBIN","BANKBARODA",
+               "INDUSINDBK","FEDERALBNK","IDFCFIRSTB","AUBANK","BAJFINANCE","BAJAJFINSV"],
+  it:         ["TCS","INFY","WIPRO","HCLTECH","TECHM","LTIM","MPHASIS","COFORGE",
+               "PERSISTENT","TATAELXSI"],
+  fmcg:       ["HINDUNILVR","ITC","NESTLEIND","BRITANNIA","DABUR","GODREJCP",
+               "MARICO","COLPAL","TATACONSUM","VBL"],
+  auto:       ["MARUTI","M&M","TATAMOTORS","BAJAJ-AUTO","HEROMOTOCO","EICHERMOT",
+               "ASHOKLEY","TVSMOTOR","BALKRISIND","MOTHERSON"],
+  pharma:     ["SUNPHARMA","DRREDDY","CIPLA","DIVISLAB","AUROPHARMA","BIOCON",
+               "LUPIN","ALKEM","TORNTPHARM","APOLLOHOSP"],
+};
+
+let _selectedTickers = new Set(["RELIANCE"]);
+let _pickerOpen = false;
+
+function _buildTickerList(filter) {
+  const list = document.getElementById('ticker-list');
+  if (!list) return;
+  const q = (filter || '').trim().toLowerCase();
+  let html = '';
+  for (const [sector, stocks] of Object.entries(NSE_TICKERS)) {
+    const matches = stocks.filter(([sym, name]) =>
+      !q || sym.toLowerCase().includes(q) || name.toLowerCase().includes(q) || sector.toLowerCase().includes(q)
+    );
+    if (!matches.length) continue;
+    html += `<div class="sector-header">${sector}</div>`;
+    for (const [sym, name] of matches) {
+      const checked = _selectedTickers.has(sym) ? 'checked' : '';
+      html += `<div class="ticker-row" onclick="toggleTicker('${sym}',this)">
+        <input type="checkbox" ${checked} onclick="event.stopPropagation();toggleTicker('${sym}',this.closest('.ticker-row'))">
+        <span class="t-sym">${sym}</span>
+        <span class="t-name">${name}</span>
+      </div>`;
+    }
+  }
+  if (!html) html = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px;">No tickers match "${filter}"</div>`;
+  list.innerHTML = html;
+}
+
+function toggleTicker(sym, rowEl) {
+  if (_selectedTickers.has(sym)) {
+    _selectedTickers.delete(sym);
+  } else {
+    _selectedTickers.add(sym);
+  }
+  // sync checkbox
+  const cb = rowEl && rowEl.querySelector('input[type=checkbox]');
+  if (cb) cb.checked = _selectedTickers.has(sym);
+  _renderChips();
+  _syncHiddenInput();
+}
+
+function _renderChips() {
+  const container = document.getElementById('ticker-chips');
+  const placeholder = document.getElementById('chips-placeholder');
+  const countEl = document.getElementById('picker-count');
+  if (!container) return;
+
+  // Remove old chips (keep placeholder)
+  container.querySelectorAll('.ticker-chip').forEach(el => el.remove());
+
+  if (_selectedTickers.size === 0) {
+    if (placeholder) placeholder.style.display = '';
+  } else {
+    if (placeholder) placeholder.style.display = 'none';
+    for (const sym of [..._selectedTickers].sort()) {
+      const chip = document.createElement('span');
+      chip.className = 'ticker-chip';
+      chip.innerHTML = `${sym}<span class="chip-x" onclick="event.stopPropagation();removeTicker('${sym}')">×</span>`;
+      container.appendChild(chip);
+    }
+  }
+  if (countEl) countEl.textContent = `${_selectedTickers.size} selected`;
+}
+
+function removeTicker(sym) {
+  _selectedTickers.delete(sym);
+  _renderChips();
+  _syncHiddenInput();
+  // sync picker checkbox if open
+  if (_pickerOpen) {
+    document.querySelectorAll('#ticker-list .ticker-row').forEach(row => {
+      const s = row.querySelector('.t-sym');
+      if (s && s.textContent === sym) {
+        const cb = row.querySelector('input[type=checkbox]');
+        if (cb) cb.checked = false;
+      }
+    });
+  }
+}
+
+function _syncHiddenInput() {
+  const el = document.getElementById('tickers-input');
+  if (el) el.value = [..._selectedTickers].join(' ');
+}
+
+function togglePicker() {
+  _pickerOpen = !_pickerOpen;
+  const picker = document.getElementById('ticker-picker');
+  if (!picker) return;
+  picker.style.display = _pickerOpen ? 'block' : 'none';
+  if (_pickerOpen) {
+    _buildTickerList('');
+    const search = document.getElementById('ticker-search');
+    if (search) { search.value = ''; search.focus(); }
+  }
+}
+
+// Close picker if clicking outside
+document.addEventListener('mousedown', e => {
+  if (!_pickerOpen) return;
+  const picker = document.getElementById('ticker-picker');
+  const chips  = document.getElementById('ticker-chips');
+  if (picker && !picker.contains(e.target) && chips && !chips.contains(e.target)) {
+    _pickerOpen = false;
+    picker.style.display = 'none';
+  }
+});
+
+function filterTickerList(val) {
+  _buildTickerList(val);
+}
+
+function applyPreset(key) {
+  const syms = PRESETS[key];
+  if (!syms) return;
+  syms.forEach(s => _selectedTickers.add(s));
+  _renderChips();
+  _syncHiddenInput();
+  _buildTickerList(document.getElementById('ticker-search')?.value || '');
+}
+
+function selectAllTickers() {
+  const q = document.getElementById('ticker-search')?.value || '';
+  for (const [sector, stocks] of Object.entries(NSE_TICKERS)) {
+    for (const [sym, name] of stocks) {
+      if (!q || sym.toLowerCase().includes(q.toLowerCase()) ||
+          name.toLowerCase().includes(q.toLowerCase()) ||
+          sector.toLowerCase().includes(q.toLowerCase())) {
+        _selectedTickers.add(sym);
+      }
+    }
+  }
+  _renderChips();
+  _syncHiddenInput();
+  _buildTickerList(q);
+}
+
+function clearAllTickers() {
+  _selectedTickers.clear();
+  _renderChips();
+  _syncHiddenInput();
+  _buildTickerList(document.getElementById('ticker-search')?.value || '');
+}
+
+// Init: render initial chip for RELIANCE
+_renderChips();
+_syncHiddenInput();
+
+</script>
+
+<!-- ─── Chart Modal ─── -->
+<div id="chart-modal" onclick="if(event.target===this)closeModal()">
+  <div id="chart-panel">
+    <div id="chart-topbar">
+      <div>
+        <h2 id="chart-title">Trade Chart</h2>
+        <div class="meta" id="chart-meta"></div>
+      </div>
+      <button id="chart-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="chart-wrap">
+      <div id="chart-loading"><span class="spinner"></span> Loading candle data…</div>
+      <canvas id="trade-canvas" style="display:none"></canvas>
+    </div>
+    <div id="chart-legend">
+      <span class="leg"><span class="leg-dot" style="background:#3fb950"></span>Bullish candle</span>
+      <span class="leg"><span class="leg-dot" style="background:#f85149"></span>Bearish candle</span>
+      <span class="leg"><span class="leg-dot" style="background:#f0883e;border-radius:0;height:2px;width:18px"></span>Surge High</span>
+      <span class="leg"><span class="leg-dot" style="background:#f85149;border-radius:0;height:2px;width:18px"></span>Strike</span>
+      <span class="leg"><span class="leg-dot" style="background:#58a6ff;border-radius:0;height:2px;width:2px"></span>G1 / G2 / G3 / Expiry markers</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

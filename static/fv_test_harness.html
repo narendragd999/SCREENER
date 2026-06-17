@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fair Value Bridge — Test Harness</title>
+
+<!-- Chart.js core -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- Luxon (date adapter dependency) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.5.0/luxon.min.js"></script>
+<!-- Chart.js date adapter for luxon -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-adapter-luxon/1.3.1/chartjs-adapter-luxon.umd.min.js"></script>
+<!-- Candlestick / OHLC plugin -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-chart-financial/0.2.1/chartjs-chart-financial.min.js"></script>
+
+<style>
+  /* ── Token System ───────────────────────── */
+  :root {
+    --bg:      #0d0f14;
+    --surface: #151820;
+    --border:  #252a35;
+    --text:    #e2e8f0;
+    --muted:   #64748b;
+    --under:   #00c853;
+    --fair:    #ffd600;
+    --over:    #ef4444;
+    --blue:    #60a5fa;
+    --purple:  #a78bfa;
+    --orange:  #fb923c;
+    --ema:     #f472b6;   /* 9 EMA — pink, distinct from all FV lines */
+    --radius:  8px;
+    --font:    'Inter', 'Segoe UI', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  h1 { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
+
+  /* ── Controls ───────────────────────────── */
+  .controls {
+    display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .ctrl-group { display: flex; flex-direction: column; gap: 4px; }
+  label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  input, select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    font-size: 13px;
+    outline: none;
+  }
+  input:focus, select:focus { border-color: var(--blue); }
+  button {
+    background: var(--blue);
+    color: #000;
+    border: none;
+    border-radius: var(--radius);
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s;
+    align-self: flex-end;
+  }
+  button:hover { opacity: .85; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── Status / error ─────────────────────── */
+  .status-bar {
+    font-size: 12px;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+    color: var(--muted);
+    display: none;
+  }
+  .status-bar.visible { display: block; }
+  .status-bar.error   { border-color: var(--over);  color: var(--over); }
+  .status-bar.ok      { border-color: var(--under); color: var(--under); }
+  .status-bar.warn    { border-color: var(--fair);  color: var(--fair); }
+
+  /* ── Summary cards ──────────────────────── */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .card .value { font-size: 20px; font-weight: 700; }
+  .card.under  { border-color: var(--under); }
+  .card.over   { border-color: var(--over); }
+  .card.fair   { border-color: var(--fair); }
+
+  /* ── Chart toolbar ──────────────────────── */
+  .chart-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .chart-toolbar .ctrl-group { flex-direction: row; align-items: center; gap: 6px; }
+  .chart-toolbar label { margin-bottom: 0; }
+
+  .toggle-group {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .toggle-btn {
+    background: var(--surface);
+    color: var(--muted);
+    border: none;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .12s, color .12s;
+    border-radius: 0;
+  }
+  .toggle-btn:hover { background: #1e2330; color: var(--text); }
+  .toggle-btn.active { background: #1e2330; color: var(--blue); }
+
+  /* ── Chart ──────────────────────────────── */
+  .chart-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 20px;
+    position: relative;
+  }
+  .chart-wrap canvas { display: block; }
+
+  /* ── Legend pills ───────────────────────── */
+  .legend-row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-swatch {
+    width: 20px; height: 3px; border-radius: 2px; flex-shrink: 0;
+  }
+  .legend-swatch.dashed {
+    background: repeating-linear-gradient(90deg, currentColor 0, currentColor 4px, transparent 4px, transparent 7px);
+  }
+
+  /* ── FY Table ───────────────────────────── */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: auto;
+    margin-bottom: 20px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th {
+    background: #1a1e28;
+    padding: 8px 12px;
+    text-align: right;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    white-space: nowrap;
+    position: sticky; top: 0;
+  }
+  thead th:first-child { text-align: left; }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { padding: 7px 12px; text-align: right; }
+  tbody td:first-child { text-align: left; font-weight: 600; }
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+  }
+  .pill.UNDERVALUED { background: rgba(0,200,83,.2); color: var(--under); }
+  .pill.OVERVALUED  { background: rgba(239,68,68,.2); color: var(--over); }
+  .pill.FAIR        { background: rgba(255,214,0,.15); color: var(--fair); }
+
+  /* ── CSV raw output ─────────────────────── */
+  .raw-box {
+    background: #0a0c10;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--purple);
+    white-space: pre-wrap;
+    word-break: break-all;
+    min-height: 38px;
+  }
+  .raw-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .05em; }
+</style>
+</head>
+<body>
+
+<h1>Fair Value Bridge — Test Harness</h1>
+<p class="subtitle">Verify your /api/fv/pine bridge endpoint before loading the Pine Script indicator</p>
+
+<div class="controls">
+  <div class="ctrl-group">
+    <label>Server URL</label>
+    <input id="host" value="http://localhost:8002" style="width:220px">
+  </div>
+  <div class="ctrl-group">
+    <label>NSE Ticker</label>
+    <input id="ticker" value="RELIANCE" style="width:140px">
+  </div>
+  <div class="ctrl-group">
+    <label>FY Start</label>
+    <input id="fy_start" type="number" value="2014" style="width:90px">
+  </div>
+  <button id="btn" onclick="runTest()">Fetch &amp; Plot</button>
+</div>
+
+<div id="status" class="status-bar"></div>
+
+<!-- Summary cards -->
+<div id="cards" class="cards" style="display:none"></div>
+
+<!-- Chart toolbar: only shown after data loads -->
+<div id="chart-toolbar" class="chart-toolbar" style="display:none">
+  <div class="ctrl-group">
+    <label>Chart Type</label>
+    <div class="toggle-group">
+      <button class="toggle-btn active" id="btn-candle" onclick="setChartMode('candlestick')">Candle</button>
+      <button class="toggle-btn" id="btn-line"   onclick="setChartMode('line')">Line</button>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <label>Window</label>
+    <select id="candle-window" onchange="rebuildChart()">
+      <option value="90">Last 90 days</option>
+      <option value="180" selected>Last 180 days</option>
+      <option value="365">Last 365 days</option>
+      <option value="730">Last 2 years</option>
+      <option value="0">All history</option>
+    </select>
+  </div>
+</div>
+
+<!-- Chart -->
+<div id="chart-wrap" class="chart-wrap" style="display:none; height:480px;">
+  <canvas id="myChart"></canvas>
+  <div class="legend-row" id="chart-legend"></div>
+</div>
+
+<!-- FY table -->
+<div id="table-wrap" class="table-wrap" style="display:none">
+  <table>
+    <thead>
+      <tr>
+        <th>FY</th>
+        <th>OP Fair ₹</th>
+        <th>R² OP</th>
+        <th>Sales Fair ₹</th>
+        <th>R² Sales</th>
+        <th>TTM Fair ₹</th>
+        <th>R² TTM</th>
+        <th>Composite ₹</th>
+        <th>Gap%</th>
+        <th>Bucket</th>
+      </tr>
+    </thead>
+    <tbody id="fy-tbody"></tbody>
+  </table>
+</div>
+
+<!-- Raw CSV for a specific FY -->
+<div id="raw-section" style="display:none">
+  <p class="raw-label">Raw CSV — what Pine Script receives for the last FY row</p>
+  <div id="raw-box" class="raw-box"></div>
+</div>
+
+<script>
+/* ─────────────────────────────────────────────────────────────
+   State
+───────────────────────────────────────────────────────────── */
+let chartInst   = null;
+let lastData    = null;          // full API response, cached for re-renders
+let chartMode   = 'candlestick'; // 'candlestick' | 'line'
+let hasOHLC     = false;         // whether API returned open/high/low
+
+/* ─────────────────────────────────────────────────────────────
+   Helpers
+───────────────────────────────────────────────────────────── */
+function setStatus(msg, type = '') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status-bar visible ' + type;
+}
+
+function fmt(v) {
+  if (v === null || v === undefined || v === 0) return '—';
+  return '₹' + Number(v).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function fmtPct(v) {
+  if (v === null || v === undefined) return '—';
+  return (v >= 0 ? '+' : '') + Number(v).toFixed(1) + '%';
+}
+function fmtR2(v) { return v ? Number(v).toFixed(3) : '—'; }
+
+/* ─────────────────────────────────────────────────────────────
+   9 EMA — computed on an array of close prices
+   Returns array of same length; first value = close[0].
+───────────────────────────────────────────────────────────── */
+function calc9EMA(closes) {
+  const k = 2 / (9 + 1);
+  const result = new Array(closes.length).fill(null);
+  if (!closes.length) return result;
+  result[0] = closes[0];
+  for (let i = 1; i < closes.length; i++) {
+    result[i] = closes[i] * k + result[i - 1] * (1 - k);
+  }
+  return result;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Indian FY helper: Apr 1 fy_year → Mar 31 fy_year+1
+───────────────────────────────────────────────────────────── */
+function fyForDate(dateStr) {
+  const d = new Date(dateStr);
+  return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Windowing: slice the last N calendar days from price_history
+───────────────────────────────────────────────────────────── */
+function windowedPrices(prices) {
+  const days = parseInt(document.getElementById('candle-window').value, 10);
+  if (!days || days <= 0 || prices.length <= days) return prices;
+  return prices.slice(prices.length - days);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Chart mode toggle
+───────────────────────────────────────────────────────────── */
+function setChartMode(mode) {
+  if (mode === 'candlestick' && !hasOHLC) {
+    setStatus('⚠ No OHLC data — NSE fetch may have failed. Try Fetch & Plot again.', 'warn');
+    return;
+  }
+  chartMode = mode;
+  document.getElementById('btn-candle').classList.toggle('active', mode === 'candlestick');
+  document.getElementById('btn-line').classList.toggle('active',   mode === 'line');
+  rebuildChart();
+}
+
+/* ─────────────────────────────────────────────────────────────
+   rebuildChart — re-renders with current mode + window
+───────────────────────────────────────────────────────────── */
+function rebuildChart() {
+  if (!lastData) return;
+  renderChart(lastData);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   NSE OHLC fetch — pulls historical OHLC via NSE's public API
+   Returns a Map keyed by "YYYY-MM-DD" → {open,high,low,close}
+───────────────────────────────────────────────────────────── */
+async function fetchNSEohlc(ticker, fromDate) {
+  // NSE equityHistory API: series=EQ, from/to dates in DD-MM-YYYY
+  const fmt = d => {
+    const [y, m, day] = d.toISOString().slice(0, 10).split('-');
+    return `${day}-${m}-${y}`;
+  };
+  const toDate   = new Date();
+  const fromStr  = fmt(fromDate);
+  const toStr    = fmt(toDate);
+
+  const url = `https://www.nseindia.com/api/historical/cm/equity?symbol=${encodeURIComponent(ticker)}&series=["EQ"]&from=${fromStr}&to=${toStr}`;
+
+  // NSE requires a Referer / cookie handshake — we must first hit the main site
+  // to get session cookies, then fetch data. Since we're in browser context,
+  // we do a two-step: prime cookies via a no-cors preflight to nseindia.com,
+  // then fetch the API. In practice the cookie is already set if the user has
+  // visited NSE. Use a CORS proxy as fallback.
+  let raw;
+  try {
+    // Step 1: prime session (no-cors, just to set cookies)
+    await fetch('https://www.nseindia.com', { mode: 'no-cors', credentials: 'include' });
+    // Step 2: actual API call
+    const resp = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+      credentials: 'include',
+    });
+    if (!resp.ok) throw new Error(`NSE ${resp.status}`);
+    raw = await resp.json();
+  } catch (e) {
+    // Fallback: try allotted CORS proxy
+    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const pr = await fetch(proxy);
+    if (!pr.ok) throw new Error('NSE OHLC fetch failed (direct + proxy both failed)');
+    const wrapper = await pr.json();
+    raw = JSON.parse(wrapper.contents);
+  }
+
+  // NSE returns { data: [ { CH_TIMESTAMP, CH_OPENING_PRICE, CH_TRADE_HIGH_PRICE,
+  //   CH_TRADE_LOW_PRICE, CH_CLOSING_PRICE }, ... ] }
+  const map = new Map();
+  for (const row of (raw.data || [])) {
+    // date field can be CH_TIMESTAMP (ISO) or CH_TRADE_DATE ("DD-MM-YYYY")
+    let dateKey;
+    if (row.CH_TIMESTAMP) {
+      dateKey = row.CH_TIMESTAMP.slice(0, 10);          // "YYYY-MM-DD"
+    } else if (row.CH_TRADE_DATE) {
+      const parts = row.CH_TRADE_DATE.split('-');
+      dateKey = `${parts[2]}-${parts[1]}-${parts[0]}`; // convert to YYYY-MM-DD
+    } else continue;
+
+    map.set(dateKey, {
+      open:  parseFloat(row.CH_OPENING_PRICE),
+      high:  parseFloat(row.CH_TRADE_HIGH_PRICE),
+      low:   parseFloat(row.CH_TRADE_LOW_PRICE),
+      close: parseFloat(row.CH_CLOSING_PRICE),
+    });
+  }
+  return map;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Main fetch
+───────────────────────────────────────────────────────────── */
+async function runTest() {
+  const host     = document.getElementById('host').value.replace(/\/$/, '');
+  const ticker   = document.getElementById('ticker').value.trim().toUpperCase();
+  const fy_start = document.getElementById('fy_start').value;
+  const btn      = document.getElementById('btn');
+
+  btn.disabled = true;
+  setStatus('Fetching FV data from ' + host + ' …');
+
+  try {
+    /* ── Step 1: fetch FV data from your server ── */
+    const url  = `${host}/api/fv/pine/json?ticker=${ticker}&fy_start=${fy_start}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} — ${await resp.text()}`);
+    const data = await resp.json();
+
+    /* ── Step 2: detect whether OHLC is already present ── */
+    const sample = (data.price_history || [])[0] || {};
+    hasOHLC = sample.open !== undefined && sample.high !== undefined && sample.low !== undefined;
+
+    /* ── Step 3: if no OHLC, fetch from NSE and merge ── */
+    if (!hasOHLC && data.price_history && data.price_history.length) {
+      setStatus('Fetching OHLC candles from NSE India …');
+      try {
+        // Compute the earliest date in price_history
+        const earliest = new Date(data.price_history[0].date);
+        const ohlcMap  = await fetchNSEohlc(ticker, earliest);
+
+        if (ohlcMap.size > 0) {
+          // Merge into each price_history row
+          let mergedCount = 0;
+          data.price_history.forEach(row => {
+            const o = ohlcMap.get(row.date);
+            if (o) {
+              row.open  = o.open;
+              row.high  = o.high;
+              row.low   = o.low;
+              row.close = o.close ?? row.close; // prefer NSE close
+              mergedCount++;
+            }
+          });
+          if (mergedCount > 0) {
+            hasOHLC = true;
+            setStatus(`OK — ${data.fy_rows.length} FY rows · ${mergedCount} OHLC candles merged from NSE for ${ticker}`, 'ok');
+          } else {
+            setStatus(`OK — NSE returned data but dates didn't align — showing line chart`, 'warn');
+          }
+        } else {
+          setStatus(`OK — NSE returned no OHLC data for ${ticker} — showing line chart`, 'warn');
+        }
+      } catch (nseErr) {
+        setStatus(`OK — NSE OHLC fetch failed (${nseErr.message}) — showing line chart`, 'warn');
+      }
+    } else if (hasOHLC) {
+      setStatus(`OK — ${data.fy_rows.length} FY rows · ${data.price_history.length} OHLC candles for ${ticker}`, 'ok');
+    }
+
+    /* ── Step 4: ensure chartMode matches data availability ── */
+    if (!hasOHLC) {
+      chartMode = 'line';
+      document.getElementById('btn-candle').classList.remove('active');
+      document.getElementById('btn-line').classList.add('active');
+    } else {
+      // Restore candle mode (user's preferred default)
+      chartMode = 'candlestick';
+      document.getElementById('btn-candle').classList.add('active');
+      document.getElementById('btn-line').classList.remove('active');
+    }
+
+    // Cache for re-renders triggered by toolbar changes
+    lastData = data;
+
+    renderCards(data);
+    renderChart(data);
+    renderTable(data.fy_rows);
+    renderRaw(host, ticker, data);
+
+    document.getElementById('cards').style.display         = '';
+    document.getElementById('chart-toolbar').style.display = '';
+    document.getElementById('chart-wrap').style.display    = '';
+    document.getElementById('table-wrap').style.display    = '';
+    document.getElementById('raw-section').style.display   = '';
+
+  } catch (e) {
+    setStatus('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   renderCards — unchanged from original
+───────────────────────────────────────────────────────────── */
+function renderCards(data) {
+  const bucket = data.valuation_bucket || 'FAIR';
+  const cls    = bucket === 'UNDERVALUED' ? 'under' : bucket === 'OVERVALUED' ? 'over' : 'fair';
+  const gapColor = data.composite_gain_pct > 0 ? 'var(--under)' : data.composite_gain_pct < 0 ? 'var(--over)' : 'var(--fair)';
+
+  document.getElementById('cards').innerHTML = `
+    <div class="card ${cls}">
+      <div class="label">CMP</div>
+      <div class="value">${fmt(data.current_price)}</div>
+    </div>
+    <div class="card ${cls}">
+      <div class="label">Composite FV</div>
+      <div class="value">${fmt(data.composite_fair_price)}</div>
+    </div>
+    <div class="card ${cls}">
+      <div class="label">Upside / Downside</div>
+      <div class="value" style="color:${gapColor}">${fmtPct(data.composite_gain_pct)}</div>
+    </div>
+    <div class="card ${cls}">
+      <div class="label">Valuation</div>
+      <div class="value" style="font-size:15px">${bucket}</div>
+    </div>
+  `;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   renderChart — candlestick or line, with 9 EMA + FV overlays
+───────────────────────────────────────────────────────────── */
+function renderChart(data) {
+  const allPrices = data.price_history || [];
+  const rows      = data.fy_rows || [];
+
+  // Apply window filter
+  const prices = windowedPrices(allPrices);
+
+  // Build FY composite map
+  const fyMap = {};
+  rows.forEach(r => { fyMap[r.fy] = r.composite; });
+
+  // Close prices for EMA calculation (use the *windowed* slice)
+  const closes = prices.map(p => p.close);
+
+  // 9 EMA over the windowed closes
+  const ema9 = calc9EMA(closes);
+
+  // FV stepped line & bands — keyed to each price date
+  const fvLine  = prices.map(p => fyMap[fyForDate(p.date)] ?? null);
+  const upper15 = fvLine.map(v => v ? +(v * 1.15).toFixed(2) : null);
+  const lower15 = fvLine.map(v => v ? +(v * 0.85).toFixed(2) : null);
+
+  // Destroy previous chart instance
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+
+  const ctx       = document.getElementById('myChart').getContext('2d');
+  const useCandl  = (chartMode === 'candlestick') && hasOHLC;
+
+  /* ── Build datasets ─────────────────────── */
+  let datasets;
+
+  if (useCandl) {
+    // chartjs-chart-financial expects {x: timestamp_ms, o, h, l, c}
+    const candleData = prices.map(p => ({
+      x: new Date(p.date).getTime(),
+      o: p.open,
+      h: p.high,
+      l: p.low,
+      c: p.close,
+    }));
+
+    const ema9Data  = prices.map((p, i) => ({ x: new Date(p.date).getTime(), y: ema9[i] }));
+    const fvData    = prices.map((p, i) => ({ x: new Date(p.date).getTime(), y: fvLine[i] }));
+    const up15Data  = prices.map((p, i) => ({ x: new Date(p.date).getTime(), y: upper15[i] }));
+    const lo15Data  = prices.map((p, i) => ({ x: new Date(p.date).getTime(), y: lower15[i] }));
+
+    datasets = [
+      {
+        type: 'candlestick',
+        label: 'OHLC',
+        data: candleData,
+        color: {
+          up:   '#00c853',   // bullish candle  — green
+          down: '#ef4444',   // bearish candle  — red
+          unchanged: '#64748b',
+        },
+        borderColor: {
+          up:   '#00c853',
+          down: '#ef4444',
+          unchanged: '#64748b',
+        },
+        order: 1,
+      },
+      {
+        type: 'line',
+        label: '9 EMA',
+        data: ema9Data,
+        borderColor: '#f472b6',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0,
+        order: 2,
+      },
+      {
+        type: 'line',
+        label: 'Composite FV',
+        data: fvData,
+        borderColor: '#ffd600',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0,
+        stepped: true,
+        order: 3,
+      },
+      {
+        type: 'line',
+        label: 'FV +15%',
+        data: up15Data,
+        borderColor: 'rgba(0,200,83,0.45)',
+        borderWidth: 1,
+        borderDash: [4, 3],
+        pointRadius: 0,
+        tension: 0,
+        stepped: true,
+        fill: false,
+        order: 4,
+      },
+      {
+        type: 'line',
+        label: 'FV −15%',
+        data: lo15Data,
+        borderColor: 'rgba(239,68,68,0.45)',
+        borderWidth: 1,
+        borderDash: [4, 3],
+        pointRadius: 0,
+        tension: 0,
+        stepped: true,
+        fill: false,
+        order: 5,
+      },
+    ];
+  } else {
+    // ── Pure line mode (original behaviour + 9 EMA) ──
+    // Use string date labels; no time scale needed
+    const labels = prices.map(p => p.date);
+
+    datasets = [
+      {
+        type: 'line',
+        label: 'Price',
+        data: closes,
+        borderColor: '#93c5fd',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0,
+        order: 1,
+      },
+      {
+        type: 'line',
+        label: '9 EMA',
+        data: ema9,
+        borderColor: '#f472b6',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0,
+        order: 2,
+      },
+      {
+        type: 'line',
+        label: 'Composite FV',
+        data: fvLine,
+        borderColor: '#ffd600',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0,
+        stepped: true,
+        order: 3,
+      },
+      {
+        type: 'line',
+        label: 'FV +15%',
+        data: upper15,
+        borderColor: 'rgba(0,200,83,0.45)',
+        borderWidth: 1,
+        borderDash: [4, 3],
+        pointRadius: 0,
+        tension: 0,
+        stepped: true,
+        fill: false,
+        order: 4,
+      },
+      {
+        type: 'line',
+        label: 'FV −15%',
+        data: lower15,
+        borderColor: 'rgba(239,68,68,0.45)',
+        borderWidth: 1,
+        borderDash: [4, 3],
+        pointRadius: 0,
+        tension: 0,
+        stepped: true,
+        fill: false,
+        order: 5,
+      },
+    ];
+
+    chartInst = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: buildLineOptions(),
+    });
+    renderLegend(datasets);
+    return; // early return for line mode
+  }
+
+  /* ── Candlestick chart (mixed type via financial plugin) ── */
+  chartInst = new Chart(ctx, {
+    type: 'candlestick',   // base type; line datasets override with their own type
+    data: { datasets },
+    options: buildCandleOptions(),
+  });
+  renderLegend(datasets);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Chart.js options builders
+───────────────────────────────────────────────────────────── */
+function commonPlugins() {
+  return {
+    legend: { display: false },   // custom legend below
+    tooltip: {
+      backgroundColor: '#1a1e28',
+      borderColor: '#252a35',
+      borderWidth: 1,
+      titleColor: '#e2e8f0',
+      bodyColor:  '#94a3b8',
+      callbacks: {
+        label: ctx => {
+          if (ctx.dataset.type === 'candlestick' || ctx.dataset.label === 'OHLC') {
+            const r = ctx.raw;
+            if (r && r.o !== undefined) {
+              return [
+                ` O: ₹${r.o?.toFixed(2)}  H: ₹${r.h?.toFixed(2)}`,
+                ` L: ₹${r.l?.toFixed(2)}  C: ₹${r.c?.toFixed(2)}`,
+              ];
+            }
+          }
+          const y = ctx.parsed?.y ?? ctx.raw?.y;
+          if (y == null) return null;
+          return ` ${ctx.dataset.label}: ₹${y.toFixed(2)}`;
+        },
+      }
+    }
+  };
+}
+
+function buildCandleOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: commonPlugins(),
+    scales: {
+      x: {
+        type: 'time',
+        time: { unit: 'month', tooltipFormat: 'dd MMM yyyy' },
+        ticks: { color: '#64748b', maxTicksLimit: 10, font: { size: 10 } },
+        grid:  { color: '#1e2330' },
+      },
+      y: {
+        ticks: { color: '#64748b', font: { size: 10 }, callback: v => '₹' + v.toLocaleString('en-IN') },
+        grid:  { color: '#1e2330' },
+      }
+    }
+  };
+}
+
+function buildLineOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: commonPlugins(),
+    scales: {
+      x: {
+        ticks: { color: '#64748b', maxTicksLimit: 10, font: { size: 10 } },
+        grid:  { color: '#1e2330' },
+      },
+      y: {
+        ticks: { color: '#64748b', font: { size: 10 }, callback: v => '₹' + v.toLocaleString('en-IN') },
+        grid:  { color: '#1e2330' },
+      }
+    }
+  };
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Custom legend (replaces Chart.js default which can't handle
+   mixed candlestick + line datasets gracefully)
+───────────────────────────────────────────────────────────── */
+function renderLegend(datasets) {
+  const el = document.getElementById('chart-legend');
+  el.innerHTML = datasets.map(ds => {
+    if (ds.type === 'candlestick' || ds.label === 'OHLC') {
+      // Dual-colour swatch for bullish/bearish
+      return `<span class="legend-item">
+        <span style="display:inline-flex;gap:2px">
+          <span style="width:8px;height:12px;background:#00c853;border-radius:1px;display:inline-block"></span>
+          <span style="width:8px;height:12px;background:#ef4444;border-radius:1px;display:inline-block"></span>
+        </span>
+        <span>${ds.label}</span>
+      </span>`;
+    }
+    const color  = typeof ds.borderColor === 'string' ? ds.borderColor : '#94a3b8';
+    const dashed = ds.borderDash ? 'dashed' : '';
+    return `<span class="legend-item">
+      <span class="legend-swatch ${dashed}" style="background:${dashed ? 'none' : color}; color:${color}"></span>
+      <span>${ds.label}</span>
+    </span>`;
+  }).join('');
+}
+
+/* ─────────────────────────────────────────────────────────────
+   renderTable — unchanged from original
+───────────────────────────────────────────────────────────── */
+function renderTable(rows) {
+  const tbody = document.getElementById('fy-tbody');
+  tbody.innerHTML = rows.map(r => {
+    const gapColor = r.comp_gain > 0 ? 'var(--under)' : r.comp_gain < 0 ? 'var(--over)' : 'var(--fair)';
+    return `<tr>
+      <td>FY${r.fy}</td>
+      <td>${fmt(r.fair_op)}</td>
+      <td>${fmtR2(r.r2_op)}</td>
+      <td>${fmt(r.fair_s)}</td>
+      <td>${fmtR2(r.r2_s)}</td>
+      <td>${fmt(r.fair_t)}</td>
+      <td>${fmtR2(r.r2_t)}</td>
+      <td><strong>${fmt(r.composite)}</strong></td>
+      <td style="color:${gapColor}">${fmtPct(r.comp_gain)}</td>
+      <td><span class="pill ${r.bucket}">${r.bucket}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ─────────────────────────────────────────────────────────────
+   renderRaw — unchanged from original
+───────────────────────────────────────────────────────────── */
+function renderRaw(host, ticker, data) {
+  const lastRow = data.fy_rows[data.fy_rows.length - 1];
+  if (!lastRow) return;
+  const mp  = lastRow.misprice;
+  const mps = (mp >= 0 ? '+' : '') + mp;
+  const csv = [
+    lastRow.fy,
+    lastRow.fair_op, lastRow.r2_op,
+    lastRow.fair_s,  lastRow.r2_s,
+    lastRow.fair_t,  lastRow.r2_t,
+    lastRow.composite,
+    lastRow.bucket,
+    mps
+  ].join(',');
+  document.getElementById('raw-box').textContent = csv;
+}
+</script>
+</body>
+</html>

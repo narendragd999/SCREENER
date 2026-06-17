@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>9EMA Breakout Backtester</title>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root{
+  --bg0:#030912;--bg1:#070f1c;--bg2:#0c1929;--bg3:#101f30;--bg4:#162840;
+  --border:#1a3150;--border-hi:#1e4a72;
+  --teal:#00d4b1;--teal-dim:#007a68;--teal-glow:rgba(0,212,177,.15);
+  --amber:#ff7b29;--green:#00d97e;--green-glow:rgba(0,217,126,.12);
+  --red:#ff3b5c;--blue:#3d9bff;--purple:#a78bfa;
+  --text0:#e8edf5;--text1:#9ab2cc;--text2:#4d6b8a;--text3:#2a4060;
+  --font-ui:'Exo 2',sans-serif;--font-mono:'JetBrains Mono',monospace;
+  --r:8px;--r-sm:5px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:var(--font-ui);background:var(--bg0);color:var(--text0);overflow-x:hidden}
+body{
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%,rgba(0,100,200,.08) 0%,transparent 70%),
+    repeating-linear-gradient(0deg,transparent,transparent 39px,var(--border) 39px,var(--border) 40px),
+    repeating-linear-gradient(90deg,transparent,transparent 39px,var(--border) 39px,var(--border) 40px);
+  background-size:100% 100%,40px 40px,40px 40px;background-attachment:fixed;
+}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg1)}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+
+header{
+  display:flex;align-items:center;gap:0;height:54px;padding:0 20px;
+  background:linear-gradient(180deg,rgba(0,20,40,.95) 0%,rgba(7,15,28,.97) 100%);
+  border-bottom:1px solid var(--border-hi);position:sticky;top:0;z-index:100;backdrop-filter:blur(10px);
+}
+.logo-wrap{display:flex;align-items:center;gap:10px;margin-right:24px}
+.logo-icon{
+  width:36px;height:36px;
+  background:linear-gradient(135deg,#ff7b29 0%,#ff3b5c 100%);
+  border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:800;color:#fff;font-family:var(--font-mono);
+  box-shadow:0 0 20px rgba(255,123,41,.3);letter-spacing:-.5px;
+}
+.logo-title{font-size:15px;font-weight:700;letter-spacing:.04em;color:var(--text0)}
+.logo-sub{font-size:10px;letter-spacing:.1em;color:var(--text2);margin-top:2px;font-family:var(--font-mono);text-transform:uppercase}
+.back-link{
+  display:inline-flex;align-items:center;gap:6px;color:var(--text2);text-decoration:none;
+  font-size:12px;font-weight:600;padding:5px 12px;border-radius:var(--r-sm);
+  border:1px solid var(--border);transition:all .15s;
+}
+.back-link:hover{color:var(--teal);border-color:var(--teal-dim);background:var(--teal-glow)}
+.header-clock{font-family:var(--font-mono);font-size:13px;color:var(--teal);padding:0 14px;border-left:1px solid var(--border);height:54px;display:flex;align-items:center;margin-left:auto;}
+
+/* STRATEGY BADGE */
+.strat-badge{
+  display:inline-flex;align-items:center;gap:6px;padding:4px 12px;
+  border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.08em;
+  font-family:var(--font-mono);background:rgba(255,123,41,.12);
+  color:var(--amber);border:1px solid rgba(255,123,41,.35);margin-left:16px;
+}
+
+/* INPUT */
+.input-section{padding:16px 24px;background:var(--bg1);border-bottom:1px solid var(--border);}
+.section-label{font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--text2);text-transform:uppercase;font-family:var(--font-mono);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.section-label::before{content:'';display:inline-block;width:3px;height:10px;background:var(--amber);border-radius:2px}
+.input-grid{display:grid;grid-template-columns:1.4fr 1.2fr 1fr 1fr 1fr auto;gap:12px;align-items:end}
+@media(max-width:960px){.input-grid{grid-template-columns:1fr 1fr 1fr}}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:10px;letter-spacing:.1em;color:var(--text2);text-transform:uppercase;font-family:var(--font-mono)}
+.field input,.field select,.field textarea{
+  background:var(--bg2);border:1px solid var(--border);
+  color:var(--text0);font-family:var(--font-mono);font-size:12px;
+  padding:7px 10px;border-radius:var(--r-sm);outline:none;width:100%;
+  transition:border-color .15s,box-shadow .15s;resize:vertical;
+}
+.field input:focus,.field select:focus,.field textarea:focus{
+  border-color:var(--amber);box-shadow:0 0 0 2px rgba(255,123,41,.15);
+}
+.field .hint{font-size:10px;color:var(--text2);font-family:var(--font-mono);margin-top:2px}
+.btn{
+  display:inline-flex;align-items:center;gap:7px;padding:8px 18px;border-radius:var(--r-sm);
+  font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer;border:1px solid transparent;
+  font-family:var(--font-ui);white-space:nowrap;transition:all .15s;
+}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary{background:var(--amber);color:#000;box-shadow:0 0 12px rgba(255,123,41,.3)}
+.btn-primary:hover:not(:disabled){background:#ff9a50;box-shadow:0 0 20px rgba(255,123,41,.5)}
+.btn-outline{background:transparent;color:var(--text1);border-color:var(--border-hi)}
+.btn-outline:hover:not(:disabled){background:var(--bg3);color:var(--text0);border-color:var(--amber)}
+.btn-sm{padding:5px 12px;font-size:11px}
+.btn-icon{padding:7px 10px}
+
+/* PROGRESS */
+.progress-wrap{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 16px;margin-top:12px;display:none;}
+.progress-bar-track{height:6px;background:var(--bg4);border-radius:3px;overflow:hidden;margin:8px 0}
+.progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--amber),var(--red));border-radius:3px;transition:width .3s}
+.progress-label{font-size:11px;color:var(--text1);font-family:var(--font-mono)}
+.progress-counts{font-size:10px;color:var(--text2);margin-top:4px}
+
+/* STATS DASHBOARD */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding:20px 24px 0;margin-bottom:4px}
+.stat-card{
+  background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);
+  padding:14px 16px;text-align:center;
+}
+.stat-label{font-size:9px;letter-spacing:.12em;color:var(--text2);text-transform:uppercase;font-family:var(--font-mono);margin-bottom:6px}
+.stat-value{font-family:var(--font-mono);font-size:22px;font-weight:700;line-height:1}
+.stat-sub{font-size:10px;color:var(--text2);margin-top:4px}
+.stat-card.highlight{border-color:var(--amber);background:rgba(255,123,41,.05)}
+.stat-card.win{border-color:rgba(0,217,126,.4);background:var(--green-glow)}
+.stat-card.loss{border-color:rgba(255,59,92,.35);background:rgba(255,59,92,.05)}
+
+/* FILTER BAR */
+.filter-bar{display:flex;align-items:center;gap:10px;padding:12px 24px;background:var(--bg1);border-bottom:1px solid var(--border);flex-wrap:wrap}
+.filter-chip{
+  padding:4px 12px;border-radius:12px;font-size:11px;font-weight:600;letter-spacing:.04em;
+  cursor:pointer;border:1px solid var(--border);color:var(--text2);background:transparent;
+  transition:all .15s;font-family:var(--font-mono);
+}
+.filter-chip.active-all{border-color:var(--teal);color:var(--teal);background:var(--teal-glow)}
+.filter-chip.active-win{border-color:var(--green);color:var(--green);background:var(--green-glow)}
+.filter-chip.active-loss{border-color:var(--red);color:var(--red);background:rgba(255,59,92,.1)}
+.filter-chip.active-skip{border-color:var(--blue);color:var(--blue);background:rgba(61,155,255,.1)}
+.filter-chip.active-open{border-color:var(--amber);color:var(--amber);background:rgba(255,123,41,.08)}
+.sort-area{margin-left:auto;display:flex;align-items:center;gap:8px}
+.sort-area label{font-size:10px;color:var(--text2);font-family:var(--font-mono)}
+.sort-area select{background:var(--bg2);border:1px solid var(--border);color:var(--text1);font-size:11px;padding:4px 8px;border-radius:var(--r-sm);font-family:var(--font-mono);outline:none}
+
+/* MAIN CONTENT */
+.content{padding:0 24px 24px}
+
+/* CHARTS ROW */
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px 24px 0}
+@media(max-width:700px){.charts-row{grid-template-columns:1fr}}
+.chart-card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.chart-card-title{font-size:10px;letter-spacing:.1em;color:var(--text2);text-transform:uppercase;font-family:var(--font-mono);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+
+/* TABLE */
+.table-wrap{overflow-x:auto;border-radius:var(--r);border:1px solid var(--border);background:var(--bg1);margin-top:16px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead tr{background:var(--bg2);border-bottom:1px solid var(--border-hi)}
+th{padding:9px 12px;text-align:left;font-size:9px;font-weight:600;letter-spacing:.1em;color:var(--text2);text-transform:uppercase;font-family:var(--font-mono);white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--text1)}
+th.sort-asc::after{content:' ▲';font-size:8px}
+th.sort-desc::after{content:' ▼';font-size:8px}
+tbody tr{border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--bg2)}
+tbody tr.row-win{background:rgba(0,217,126,.035)}
+tbody tr.row-loss{background:rgba(255,59,92,.03)}
+tbody tr.row-open{background:rgba(255,123,41,.03)}
+tbody tr.row-skip{background:rgba(61,155,255,.025)}
+td{padding:9px 12px;color:var(--text1);white-space:nowrap}
+td.mono{font-family:var(--font-mono);font-size:11px}
+td.ticker-cell{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--text0)}
+
+/* OUTCOME BADGES */
+.badge-win{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:8px;font-size:9px;font-weight:700;letter-spacing:.08em;font-family:var(--font-mono);background:var(--green-glow);color:var(--green);border:1px solid rgba(0,217,126,.4)}
+.badge-loss{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:8px;font-size:9px;font-weight:700;letter-spacing:.08em;font-family:var(--font-mono);background:rgba(255,59,92,.1);color:var(--red);border:1px solid rgba(255,59,92,.35)}
+.badge-open{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:8px;font-size:9px;font-weight:700;letter-spacing:.08em;font-family:var(--font-mono);background:rgba(255,123,41,.1);color:var(--amber);border:1px solid rgba(255,123,41,.35)}
+.badge-skip{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:8px;font-size:9px;font-weight:700;letter-spacing:.08em;font-family:var(--font-mono);background:rgba(61,155,255,.08);color:var(--blue);border:1px solid rgba(61,155,255,.3)}
+
+/* DETAIL PANEL */
+#detail-panel{display:none;background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);margin-top:16px;overflow:hidden}
+.detail-header{display:flex;align-items:center;gap:16px;padding:16px 20px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap;background:var(--bg2)}
+.detail-ticker{font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--amber)}
+.detail-meta{font-family:var(--font-mono);font-size:12px;color:var(--text2)}
+.detail-body{padding:16px 20px}
+.metrics-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.metric-card{flex:1;min-width:110px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px}
+.metric-label{font-size:9px;letter-spacing:.12em;color:var(--text2);text-transform:uppercase;font-family:var(--font-mono)}
+.metric-value{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--teal);margin-top:3px}
+.metric-value.green{color:var(--green)} .metric-value.amber{color:var(--amber)} .metric-value.red{color:var(--red)}
+
+/* EMPTY & SPINNER */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:var(--text2);font-size:13px;gap:10px;text-align:center}
+.empty-icon{font-size:44px;opacity:.5}
+.empty-title{font-size:14px;font-weight:600;color:var(--text1)}
+.spinner{width:36px;height:36px;border-radius:50%;border:3px solid var(--bg4);border-top-color:var(--amber);animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* TOAST */
+#toast{position:fixed;top:70px;right:20px;z-index:2000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast-el{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-radius:var(--r);min-width:280px;max-width:380px;background:var(--bg2);border:1px solid var(--border);box-shadow:0 8px 32px rgba(0,0,0,.5);animation:slideIn .25s ease;pointer-events:all}
+@keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+.toast-el.fade-out{animation:slideOut .3s ease forwards}
+@keyframes slideOut{to{transform:translateX(20px);opacity:0}}
+.toast-title{font-size:12px;font-weight:600;color:var(--text0)}
+.toast-msg{font-size:11px;color:var(--text2);line-height:1.4}
+.toast-el.success{border-color:rgba(0,217,126,.35);background:rgba(0,217,126,.06)}
+.toast-el.error{border-color:rgba(255,59,92,.35);background:rgba(255,59,92,.06)}
+.toast-el.warn{border-color:rgba(255,123,41,.35);background:rgba(255,123,41,.06)}
+
+/* STRATEGY SUMMARY BOX */
+.strat-info-box{
+  background:var(--bg2);border:1px solid var(--amber);border-left:3px solid var(--amber);
+  border-radius:var(--r-sm);padding:10px 14px;margin-bottom:14px;
+  font-family:var(--font-mono);font-size:11px;color:var(--text1);line-height:1.8;
+}
+.strat-info-box span{color:var(--amber);font-weight:600}
+
+/* EXPORT BTN */
+.export-bar{display:flex;gap:8px;align-items:center;padding:10px 24px;background:var(--bg1);border-bottom:1px solid var(--border)}
+
+.divider{height:1px;background:var(--border);margin:16px 0}
+.teal{color:var(--teal)} .green{color:var(--green)} .amber{color:var(--amber)} .red{color:var(--red)} .blue{color:var(--blue)} .purple{color:var(--purple)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-wrap">
+    <div class="logo-icon">BT</div>
+    <div>
+      <div class="logo-title">9EMA Breakout Backtester</div>
+      <div class="logo-sub">Entry below Fair Value · 3% Target · Walk-Forward</div>
+    </div>
+  </div>
+  <div class="strat-badge">📐 STRATEGY v1.0</div>
+  <a class="back-link" href="/" style="margin-left:auto">← NSE Tools</a>
+  <div class="header-clock" id="header-clock">00:00:00</div>
+</header>
+
+<!-- STRATEGY INFO -->
+<div style="padding:10px 24px;background:var(--bg0);border-bottom:1px solid var(--border)">
+  <div class="strat-info-box">
+    <span>Entry Rules:</span> (1) Previous candle close &lt; 9 EMA &nbsp;→&nbsp; (2) Breakout candle close &gt; 9 EMA &nbsp;→&nbsp; (3) Confirmation candle close &gt; breakout candle close &nbsp;→&nbsp; (4) <span>Entry price &lt; Fair Value</span> (not overvalued) &nbsp;|&nbsp;
+    <span>Entry:</span> Open of next candle after confirmation &nbsp;|&nbsp; <span>Target:</span> +3% from entry &nbsp;|&nbsp; <span>Stop:</span> Close below 9 EMA
+  </div>
+</div>
+
+<!-- CONTROLS -->
+<div class="input-section">
+  <div class="section-label">Backtest Configuration</div>
+  <div class="input-grid">
+
+    <div class="field">
+      <label>Tickers (comma / space / newline)</label>
+      <textarea id="inp-tickers" rows="3" placeholder="RELIANCE, ICICIBANK, INFY, TCS, HDFCBANK, AXISBANK, TATAMOTORS, BHEL, WIPRO"></textarea>
+    </div>
+
+    <div class="field">
+      <label>Timeframe</label>
+      <select id="inp-interval">
+        <option value="1d" selected>Daily</option>
+        <option value="1wk">Weekly</option>
+      </select>
+      <div class="hint">Data period from Yahoo Finance</div>
+    </div>
+
+    <div class="field">
+      <label>Lookback (days)</label>
+      <input type="number" id="inp-lookback" value="365" min="90" max="1500" step="30"/>
+      <div class="hint">History for signal search</div>
+    </div>
+
+    <div class="field">
+      <label>Target %</label>
+      <input type="number" id="inp-target" value="3" min="1" max="20" step="0.5"/>
+      <div class="hint">Profit target per trade</div>
+    </div>
+
+    <div class="field">
+      <label>Max Hold (candles)</label>
+      <input type="number" id="inp-max-hold" value="20" min="5" max="100" step="1"/>
+      <div class="hint">Max bars before force-exit</div>
+    </div>
+
+    <div class="field" style="justify-content:flex-end">
+      <label style="visibility:hidden">x</label>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-primary" id="btn-run">⚡ Run Backtest</button>
+        <button class="btn btn-outline btn-sm" id="btn-clear">✕ Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-label" id="progress-label">Fetching data…</div>
+    <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-bar" style="width:0%"></div></div>
+    <div class="progress-counts" id="progress-counts">0 / 0</div>
+  </div>
+</div>
+
+<!-- STATS DASHBOARD (hidden until run) -->
+<div id="stats-section" style="display:none">
+  <div class="stats-grid" id="stats-grid"></div>
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-card-title">📊 Win / Loss Distribution</div>
+      <div id="chart-outcomes" style="height:180px"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-title">📈 Cumulative P&amp;L % (Trade Sequence)</div>
+      <div id="chart-pnl" style="height:180px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- FILTER + SORT BAR -->
+<div id="filter-bar" class="filter-bar" style="display:none">
+  <span style="font-size:10px;color:var(--text2);font-family:var(--font-mono);letter-spacing:.06em">FILTER:</span>
+  <button class="filter-chip active-all" data-filter="all" onclick="setFilter('all',this)">All</button>
+  <button class="filter-chip" data-filter="WIN" onclick="setFilter('WIN',this)">✅ Win</button>
+  <button class="filter-chip" data-filter="LOSS" onclick="setFilter('LOSS',this)">❌ Loss</button>
+  <button class="filter-chip" data-filter="OPEN" onclick="setFilter('OPEN',this)">⏳ Open</button>
+  <button class="filter-chip" data-filter="SKIPPED" onclick="setFilter('SKIPPED',this)">🚫 Skipped (FV)</button>
+  <div class="sort-area">
+    <label>Sort by:</label>
+    <select id="sort-col" onchange="rerenderTable()">
+      <option value="entry_date">Entry Date</option>
+      <option value="ticker">Ticker</option>
+      <option value="pnl_pct">P&amp;L %</option>
+      <option value="hold_candles">Hold (candles)</option>
+      <option value="outcome">Outcome</option>
+      <option value="fair_gap_pct">FV Gap %</option>
+    </select>
+    <select id="sort-dir" onchange="rerenderTable()">
+      <option value="desc">↓ DESC</option>
+      <option value="asc">↑ ASC</option>
+    </select>
+  </div>
+  <button class="btn btn-outline btn-sm" id="btn-export" onclick="exportCSV()">⬇ Export CSV</button>
+</div>
+
+<!-- RESULTS SECTION -->
+<div id="results-section">
+  <div class="empty-state" id="empty-state">
+    <div class="empty-icon">📉</div>
+    <div class="empty-title">9EMA Breakout Backtester</div>
+    <div>Enter tickers, configure settings, and run the backtest</div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text2);max-width:480px;line-height:1.6">
+      Scans historical data for 9EMA breakout signals. Only takes trades where entry price &lt; fundamental fair value from Screener.in regression model. Target: +3% from entry.
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL PANEL -->
+<div id="detail-panel">
+  <div class="detail-header">
+    <div class="detail-ticker" id="d-ticker">—</div>
+    <div class="detail-meta" id="d-meta"></div>
+    <div id="d-badge" style="margin-left:8px"></div>
+    <button class="btn btn-outline btn-sm" onclick="closeDetail()" style="margin-left:auto">✕ Close</button>
+  </div>
+  <div class="detail-body">
+    <div class="metrics-row" id="d-metrics"></div>
+    <div style="font-size:10px;letter-spacing:.1em;color:var(--text2);text-transform:uppercase;font-family:var(--font-mono);margin-bottom:8px">Price Chart with 9 EMA · Breakout · Confirmation · Entry · Target / Exit</div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:4px">
+      <div id="detail-chart" style="height:380px"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════
+let allTrades   = [];   // ALL trade records (WIN / LOSS / OPEN / SKIPPED)
+let activeFilter = 'all';
+let isRunning   = false;
+const API_BASE  = '';   // same-origin; if backend not present, note gracefully
+
+// ══════════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════════
+function toast(type, title, msg='') {
+  const icons = {success:'✅', error:'❌', warn:'⚠️', info:'ℹ️'};
+  const el = document.createElement('div');
+  el.className = `toast-el ${type}`;
+  el.innerHTML = `<span>${icons[type]||'•'}</span>
+    <div><div class="toast-title">${title}</div>${msg?`<div class="toast-msg">${msg}</div>`:''}</div>`;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(()=>{ el.classList.add('fade-out'); setTimeout(()=>el.remove(),350); }, 6000);
+}
+function fmtRs(n){ return n==null?'—':`₹${parseFloat(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}`; }
+function fmt(n,d=2){ return n==null?'—':parseFloat(n).toFixed(d); }
+function fmtDate(s){ return s?s.slice(0,10):'—'; }
+
+setInterval(()=>{
+  const ist = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Kolkata'}));
+  document.getElementById('header-clock').textContent = ist.toTimeString().slice(0,8);
+}, 1000);
+
+// ══════════════════════════════════════════════
+//  EMA CALCULATION (matches ema9_router.py logic exactly)
+//  ewm(span=9, adjust=False)  →  alpha = 2/(9+1) = 0.2
+// ══════════════════════════════════════════════
+function calcEMA9(closes) {
+  const alpha = 2 / (9 + 1);
+  const ema   = new Array(closes.length);
+  ema[0]      = closes[0];
+  for (let i = 1; i < closes.length; i++) {
+    ema[i] = alpha * closes[i] + (1 - alpha) * ema[i - 1];
+  }
+  return ema;
+}
+
+// ══════════════════════════════════════════════
+//  FETCH PRICE DATA VIA BACKEND
+//  Falls back to local simulation if no backend
+// ══════════════════════════════════════════════
+async function fetchOHLCV(ticker, interval, lookbackDays) {
+  // Try the FastAPI backend endpoint (same as ema9_router batch download)
+  try {
+    const resp = await fetch('/api/ema9/screen', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tickers:         [ticker],
+        interval:        interval,
+        lookback_days:   lookbackDays,
+        max_candles_ago: lookbackDays,  // we want ALL history, not recent only
+      })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      const sig  = (data.signals || []).find(s => s.ticker === ticker);
+      if (sig && sig.candles && sig.candles.length > 0) {
+        return sig.candles;  // [{date, open, high, low, close, volume, ema9}]
+      }
+    }
+  } catch(e) {}
+
+  // If backend not available, try Yahoo Finance via public API (CORS-limited, best effort)
+  return null;
+}
+
+// ══════════════════════════════════════════════
+//  CORE BACKTESTING ENGINE
+//  Mirrors _process_ticker_df logic from ema9_router.py
+//  but scans ALL historical breakouts (not just most recent)
+// ══════════════════════════════════════════════
+function runBacktestOnCandles(ticker, candles, params) {
+  // candles: [{date, open, high, low, close, volume, ema9}]
+  // We recompute EMA9 ourselves for accuracy
+  const closes = candles.map(c => c.close);
+  const opens  = candles.map(c => c.open);
+  const highs  = candles.map(c => c.high);
+  const lows   = candles.map(c => c.low);
+  const dates  = candles.map(c => c.date);
+  const ema9   = calcEMA9(closes);
+
+  const trades = [];
+  const { targetPct, maxHoldCandles, fairPrice } = params;
+  const target = targetPct / 100;
+
+  // Track which candles are already "in trade" to avoid overlapping entries
+  let inTradeUntil = -1;
+
+  for (let i = 1; i < candles.length - 2; i++) {
+    if (i <= inTradeUntil) continue;  // skip overlapping
+
+    const prevClose = closes[i - 1];
+    const prevEma   = ema9[i - 1];
+    const currClose = closes[i];
+    const currEma   = ema9[i];
+    const confClose = closes[i + 1];
+
+    // ── SIGNAL CONDITION (exact match of ema9_router.py) ──────────────
+    // 1. prev candle BELOW 9 EMA
+    // 2. breakout candle CLOSES ABOVE 9 EMA
+    // 3. confirmation candle CLOSES ABOVE breakout candle close
+    const isBreakout = (prevClose < prevEma) && (currClose > currEma) && (confClose > currClose);
+    if (!isBreakout) continue;
+
+    // ── FAIR VALUE GATE ───────────────────────────────────────────────
+    // Entry is next candle's open (i+2)
+    if (i + 2 >= candles.length) continue;
+    const entryPrice = opens[i + 2];
+    const entryDate  = dates[i + 2];
+    const entryEma9  = ema9[i + 2];
+
+    const hasFV = fairPrice != null && fairPrice > 0;
+    const belowFV = hasFV ? (entryPrice < fairPrice) : true;  // if no FV data, allow trade
+
+    const fairGapPct = hasFV ? ((fairPrice - entryPrice) / entryPrice * 100) : null;
+
+    if (hasFV && !belowFV) {
+      // SKIPPED — entry would be above fair value
+      trades.push({
+        ticker,
+        breakout_date:  dates[i],
+        breakout_close: parseFloat(currClose.toFixed(2)),
+        confirm_date:   dates[i + 1],
+        confirm_close:  parseFloat(confClose.toFixed(2)),
+        entry_date:     entryDate,
+        entry_price:    parseFloat(entryPrice.toFixed(2)),
+        entry_ema9:     parseFloat(entryEma9.toFixed(2)),
+        fair_price:     parseFloat(fairPrice.toFixed(2)),
+        fair_gap_pct:   fairGapPct != null ? parseFloat(fairGapPct.toFixed(2)) : null,
+        target_price:   parseFloat((entryPrice * (1 + target)).toFixed(2)),
+        stop_reason:    'OVERVALUED',
+        outcome:        'SKIPPED',
+        exit_price:     null,
+        exit_date:      null,
+        pnl_pct:        null,
+        hold_candles:   null,
+        breakout_idx:   i,
+        confirm_idx:    i + 1,
+        entry_idx:      i + 2,
+        exit_idx:       null,
+      });
+      continue;
+    }
+
+    // ── TRADE SIMULATION ─────────────────────────────────────────────
+    const targetPrice = entryPrice * (1 + target);
+    let exitPrice = null, exitDate = null, outcome = 'OPEN', exitIdx = null;
+    let stopReason = null;
+
+    for (let j = i + 2 + 1; j < candles.length && j <= i + 2 + maxHoldCandles; j++) {
+      const h = highs[j];
+      const l = lows[j];
+      const c = closes[j];
+      const e = ema9[j];
+
+      // TARGET HIT: High of candle touches/exceeds target
+      if (h >= targetPrice) {
+        exitPrice  = parseFloat(targetPrice.toFixed(2));
+        exitDate   = dates[j];
+        outcome    = 'WIN';
+        stopReason = 'TARGET';
+        exitIdx    = j;
+        inTradeUntil = j;
+        break;
+      }
+
+      // STOP: Candle closes BELOW 9 EMA (trend reversal signal)
+      if (c < e) {
+        exitPrice  = parseFloat(c.toFixed(2));
+        exitDate   = dates[j];
+        outcome    = 'LOSS';
+        stopReason = 'EMA_BREAK';
+        exitIdx    = j;
+        inTradeUntil = j;
+        break;
+      }
+    }
+
+    // Max hold expiry — exit at last candle's close if still open
+    if (outcome === 'OPEN' && exitIdx == null) {
+      const lastJ = Math.min(i + 2 + maxHoldCandles, candles.length - 1);
+      if (lastJ > i + 2) {
+        exitPrice  = parseFloat(closes[lastJ].toFixed(2));
+        exitDate   = dates[lastJ];
+        exitIdx    = lastJ;
+        outcome    = exitPrice >= entryPrice ? 'WIN' : 'LOSS';
+        stopReason = 'MAX_HOLD';
+        inTradeUntil = lastJ;
+      }
+    }
+
+    const pnlPct = exitPrice != null
+      ? parseFloat(((exitPrice - entryPrice) / entryPrice * 100).toFixed(2))
+      : null;
+    const holdCandles = exitIdx != null ? (exitIdx - (i + 2)) : null;
+
+    trades.push({
+      ticker,
+      breakout_date:  dates[i],
+      breakout_close: parseFloat(currClose.toFixed(2)),
+      confirm_date:   dates[i + 1],
+      confirm_close:  parseFloat(confClose.toFixed(2)),
+      entry_date:     entryDate,
+      entry_price:    parseFloat(entryPrice.toFixed(2)),
+      entry_ema9:     parseFloat(entryEma9.toFixed(2)),
+      fair_price:     hasFV ? parseFloat(fairPrice.toFixed(2)) : null,
+      fair_gap_pct:   fairGapPct != null ? parseFloat(fairGapPct.toFixed(2)) : null,
+      target_price:   parseFloat(targetPrice.toFixed(2)),
+      stop_reason:    stopReason,
+      outcome,
+      exit_price:     exitPrice,
+      exit_date:      exitDate,
+      pnl_pct:        pnlPct,
+      hold_candles:   holdCandles,
+      breakout_idx:   i,
+      confirm_idx:    i + 1,
+      entry_idx:      i + 2,
+      exit_idx:       exitIdx,
+      _candles:       candles,
+      _ema9:          ema9,
+    });
+
+    // skip forward past confirmation
+    if (exitIdx != null) i = exitIdx;
+  }
+
+  return trades;
+}
+
+// ══════════════════════════════════════════════
+//  FAIR VALUE FETCH  (from sma_router API)
+// ══════════════════════════════════════════════
+async function fetchFairValue(ticker) {
+  try {
+    const resp = await fetch(`/api/sma/analyze/${ticker}?include_other_income=true`, {
+      headers: {'Content-Type':'application/json'}
+    });
+    if (resp.ok) {
+      const d = await resp.json();
+      if (d.composite_fair_price != null) return d.composite_fair_price;
+    }
+  } catch(e) {}
+  // Fallback: try screener endpoint
+  try {
+    const resp2 = await fetch('/api/ema9/screen', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({tickers:[ticker], interval:'1d', lookback_days:180, max_candles_ago:5})
+    });
+    if (resp2.ok) {
+      const d2 = await resp2.json();
+      const sig = (d2.signals||[]).find(s=>s.ticker===ticker);
+      if (sig && sig.composite_fair_price != null) return sig.composite_fair_price;
+    }
+  } catch(e) {}
+  return null;
+}
+
+// ══════════════════════════════════════════════
+//  MAIN RUN HANDLER
+// ══════════════════════════════════════════════
+document.getElementById('btn-run').addEventListener('click', runBacktest);
+document.getElementById('btn-clear').addEventListener('click', clearAll);
+
+async function runBacktest() {
+  if (isRunning) return;
+
+  const rawTickers = document.getElementById('inp-tickers').value;
+  const tickers = rawTickers.split(/[\s,;\n]+/).map(s=>s.trim().toUpperCase()).filter(Boolean);
+  if (!tickers.length) { toast('warn','No tickers entered','Add ticker symbols to run backtest'); return; }
+
+  const interval      = document.getElementById('inp-interval').value;
+  const lookbackDays  = parseInt(document.getElementById('inp-lookback').value) || 365;
+  const targetPct     = parseFloat(document.getElementById('inp-target').value) || 3;
+  const maxHoldCandles= parseInt(document.getElementById('inp-max-hold').value) || 20;
+
+  isRunning = true;
+  allTrades = [];
+  closeDetail();
+  document.getElementById('stats-section').style.display = 'none';
+  document.getElementById('filter-bar').style.display    = 'none';
+  document.getElementById('results-section').innerHTML   =
+    `<div class="empty-state"><div class="spinner"></div><div class="empty-title">Backtesting ${tickers.length} ticker(s)…</div><div style="font-size:11px;color:var(--text2)">Scanning ${lookbackDays} days of history + fair value data</div></div>`;
+
+  const btn = document.getElementById('btn-run');
+  btn.disabled = true; btn.textContent = '⏳ Running…';
+
+  const pw = document.getElementById('progress-wrap');
+  const pb = document.getElementById('progress-bar');
+  const pl = document.getElementById('progress-label');
+  const pc = document.getElementById('progress-counts');
+  pw.style.display = 'block';
+  pl.textContent   = `Running full ${lookbackDays}-day backtest on ${tickers.length} ticker(s)…`;
+  pc.textContent   = 'Contacting backend…';
+  pb.style.width   = '15%';
+
+  try {
+    // ── Use dedicated backtest endpoint which scans the FULL lookback window ──
+    const resp = await fetch('/api/backtest/ema9/run', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tickers,
+        interval,
+        lookback_days: lookbackDays,
+        target_pct:    targetPct,
+        max_hold:      maxHoldCandles,
+        require_fv:    false,  // still run, just mark trades without FV
+      }),
+    });
+
+    pb.style.width = '80%';
+    pl.textContent = 'Processing results…';
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(`Backend error ${resp.status}: ${err}`);
+    }
+
+    const data = await resp.json();
+    allTrades = data.trades || [];
+
+    // Show failed tickers as warnings
+    (data.failed || []).forEach(f => toast('warn', `${f.ticker}: skipped`, f.error || 'No data'));
+
+    pb.style.width = '100%';
+    pl.textContent = 'Backtest complete';
+
+  } catch(e) {
+    isRunning = false;
+    btn.disabled = false; btn.textContent = '⚡ Run Backtest';
+    pl.textContent = 'Error — see console';
+    document.getElementById('results-section').innerHTML =
+      `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Backend error</div><div style="font-size:11px;color:var(--red);max-width:500px">${e.message}</div><div style="margin-top:8px;font-size:11px;color:var(--text2)">Make sure the FastAPI server is running and /api/backtest/ema9/run is accessible.</div></div>`;
+    toast('error', 'Backtest failed', e.message);
+    return;
+  }
+
+  isRunning = false;
+  btn.disabled = false; btn.textContent = '⚡ Run Backtest';
+
+  if (!allTrades.length) {
+    document.getElementById('results-section').innerHTML =
+      `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No signals found</div><div>Try increasing lookback days or checking ticker symbols</div></div>`;
+    toast('warn','No trades found','No 9EMA breakout signals in the backtest window');
+  } else {
+    renderDashboard();
+    const taken   = allTrades.filter(t => t.outcome !== 'SKIPPED').length;
+    const skipped = allTrades.filter(t => t.outcome === 'SKIPPED').length;
+    toast('success', `Backtest complete`, `${taken} trades taken · ${skipped} filtered by FV gate`);
+  }
+}
+
+function clearAll() {
+  allTrades = [];
+  activeFilter = 'all';
+  closeDetail();
+  document.getElementById('stats-section').style.display   = 'none';
+  document.getElementById('filter-bar').style.display      = 'none';
+  document.getElementById('progress-wrap').style.display   = 'none';
+  document.getElementById('results-section').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">📉</div>
+      <div class="empty-title">9EMA Breakout Backtester</div>
+      <div>Enter tickers, configure settings, and run the backtest</div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+//  DASHBOARD & STATS
+// ══════════════════════════════════════════════
+function computeStats(trades) {
+  const taken   = trades.filter(t => t.outcome !== 'SKIPPED');
+  const wins    = taken.filter(t => t.outcome === 'WIN');
+  const losses  = taken.filter(t => t.outcome === 'LOSS');
+  const open    = taken.filter(t => t.outcome === 'OPEN');
+  const skipped = trades.filter(t => t.outcome === 'SKIPPED');
+  const closed  = [...wins, ...losses];
+
+  const winRate = closed.length ? (wins.length / closed.length * 100) : 0;
+  const avgWin  = wins.length   ? (wins.reduce((s,t)=>s+t.pnl_pct,0) / wins.length) : 0;
+  const avgLoss = losses.length ? (losses.reduce((s,t)=>s+t.pnl_pct,0) / losses.length) : 0;
+  const totalPnl= closed.reduce((s,t)=>s+(t.pnl_pct||0),0);
+  const avgHold = taken.filter(t=>t.hold_candles!=null).reduce((s,t,_,a)=>s+t.hold_candles/a.length,0);
+  const pfactor = Math.abs(avgLoss) > 0 ? Math.abs(avgWin / avgLoss) : null;
+
+  return { taken, wins, losses, open, skipped, closed, winRate, avgWin, avgLoss, totalPnl, avgHold, pfactor };
+}
+
+function renderDashboard() {
+  const s = computeStats(allTrades);
+  document.getElementById('stats-section').style.display = 'block';
+  document.getElementById('filter-bar').style.display    = 'flex';
+
+  const sg = document.getElementById('stats-grid');
+  sg.innerHTML = `
+    <div class="stat-card highlight">
+      <div class="stat-label">Total Signals</div>
+      <div class="stat-value amber">${allTrades.length}</div>
+      <div class="stat-sub">${s.skipped.length} skipped (overvalued)</div>
+    </div>
+    <div class="stat-card win">
+      <div class="stat-label">Win Rate</div>
+      <div class="stat-value green">${s.winRate.toFixed(1)}%</div>
+      <div class="stat-sub">${s.wins.length}W / ${s.losses.length}L / ${s.open.length} Open</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Win</div>
+      <div class="stat-value green">+${s.avgWin.toFixed(2)}%</div>
+      <div class="stat-sub">per winning trade</div>
+    </div>
+    <div class="stat-card loss">
+      <div class="stat-label">Avg Loss</div>
+      <div class="stat-value red">${s.avgLoss.toFixed(2)}%</div>
+      <div class="stat-sub">per losing trade</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total P&amp;L</div>
+      <div class="stat-value ${s.totalPnl>=0?'green':'red'}">${s.totalPnl>=0?'+':''}${s.totalPnl.toFixed(2)}%</div>
+      <div class="stat-sub">sum across closed trades</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Profit Factor</div>
+      <div class="stat-value ${s.pfactor>=1?'green':'red'}">${s.pfactor!=null?s.pfactor.toFixed(2):'—'}</div>
+      <div class="stat-sub">avg win / avg loss</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Hold</div>
+      <div class="stat-value amber">${Math.round(s.avgHold)}</div>
+      <div class="stat-sub">candles per trade</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Trades Taken</div>
+      <div class="stat-value">${s.taken.length}</div>
+      <div class="stat-sub">${s.skipped.length} skipped by FV gate</div>
+    </div>
+  `;
+
+  renderCharts(s);
+  rerenderTable();
+}
+
+function renderCharts(s) {
+  // Outcome pie chart
+  Plotly.newPlot('chart-outcomes', [{
+    type: 'pie',
+    labels: ['Win', 'Loss', 'Open', 'Skipped'],
+    values: [s.wins.length, s.losses.length, s.open.length, s.skipped.length],
+    marker: { colors: ['#00d97e','#ff3b5c','#ff7b29','#3d9bff'] },
+    textinfo: 'percent+label',
+    textfont: { family:'JetBrains Mono', size:10, color:'#e8edf5' },
+    hole: 0.4,
+  }], {
+    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+    font: { family:'JetBrains Mono', size:10, color:'#4d6b8a' },
+    margin: { l:10, r:10, t:10, b:10 },
+    showlegend: false,
+  }, { responsive:true, displayModeBar:false });
+
+  // Cumulative P&L line chart
+  const closedTrades = [...s.wins, ...s.losses].sort((a,b)=>
+    (a.entry_date||'').localeCompare(b.entry_date||'')
+  );
+  let cumPnl = 0;
+  const xLabels = [];
+  const yValues = [];
+  closedTrades.forEach((t,i) => {
+    cumPnl += (t.pnl_pct || 0);
+    xLabels.push(`T${i+1} ${t.ticker}`);
+    yValues.push(parseFloat(cumPnl.toFixed(2)));
+  });
+
+  const lineColor  = yValues.length ? (yValues[yValues.length-1] >= 0 ? '#00d97e' : '#ff3b5c') : '#00d97e';
+  const fillColor  = yValues.length ? (yValues[yValues.length-1] >= 0 ? 'rgba(0,217,126,.08)' : 'rgba(255,59,92,.08)') : 'rgba(0,217,126,.08)';
+
+  Plotly.newPlot('chart-pnl', [{
+    type: 'scatter', mode: 'lines+markers',
+    x: xLabels, y: yValues,
+    line: { color: lineColor, width: 2 },
+    marker: { size: 4, color: lineColor },
+    fill: 'tozeroy', fillcolor: fillColor,
+  }], {
+    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+    font: { family:'JetBrains Mono', size:9, color:'#4d6b8a' },
+    xaxis: { showgrid:false, tickfont:{size:8}, showticklabels: xLabels.length<=30, rangeslider:{visible:false} },
+    yaxis: { showgrid:true, gridcolor:'#1a3150', ticksuffix:'%', tickfont:{size:9}, zeroline:true, zerolinecolor:'#1e4a72' },
+    margin: { l:45, r:10, t:10, b:30 },
+    hovermode: 'x unified',
+    hoverlabel: { bgcolor:'#0c1929', bordercolor:'#1e4a72', font:{size:10} },
+  }, { responsive:true, displayModeBar:false });
+}
+
+// ══════════════════════════════════════════════
+//  TABLE RENDER
+// ══════════════════════════════════════════════
+let currentDetail = null;
+let activeFilter2 = 'all';
+
+function setFilter(f, el) {
+  activeFilter = f;
+  document.querySelectorAll('.filter-chip').forEach(c => {
+    c.className = 'filter-chip';
+    if (c.dataset.filter === f) {
+      if (f==='all') c.classList.add('active-all');
+      else if (f==='WIN') c.classList.add('active-win');
+      else if (f==='LOSS') c.classList.add('active-loss');
+      else if (f==='OPEN') c.classList.add('active-open');
+      else if (f==='SKIPPED') c.classList.add('active-skip');
+    }
+  });
+  rerenderTable();
+}
+
+function getFilteredSorted() {
+  let rows = activeFilter === 'all' ? [...allTrades] : allTrades.filter(t => t.outcome === activeFilter);
+  const col = document.getElementById('sort-col').value;
+  const dir = document.getElementById('sort-dir').value === 'asc' ? 1 : -1;
+  rows.sort((a,b) => {
+    let va = a[col], vb = b[col];
+    if (va == null) va = dir > 0 ? Infinity : -Infinity;
+    if (vb == null) vb = dir > 0 ? Infinity : -Infinity;
+    if (typeof va === 'string') return dir * va.localeCompare(vb);
+    return (va - vb) * dir;
+  });
+  return rows;
+}
+
+function rerenderTable() {
+  // Main trades = WIN / LOSS / OPEN (filter applied)
+  // Skipped trades always shown separately below, regardless of filter
+  const activeRows = activeFilter === 'all'
+    ? allTrades.filter(t => t.outcome !== 'SKIPPED')
+    : activeFilter === 'SKIPPED'
+      ? []   // skipped has its own section; main table shows nothing
+      : allTrades.filter(t => t.outcome === activeFilter);
+
+  const col = document.getElementById('sort-col').value;
+  const dir = document.getElementById('sort-dir').value === 'asc' ? 1 : -1;
+  const sortedRows = [...activeRows].sort((a,b) => {
+    let va = a[col], vb = b[col];
+    if (va == null) va = dir > 0 ? Infinity : -Infinity;
+    if (vb == null) vb = dir > 0 ? Infinity : -Infinity;
+    if (typeof va === 'string') return dir * va.localeCompare(vb);
+    return (va - vb) * dir;
+  });
+
+  const skippedRows = [...allTrades.filter(t => t.outcome === 'SKIPPED')]
+    .sort((a,b) => (b.entry_date||'').localeCompare(a.entry_date||''));
+
+  const rs = document.getElementById('results-section');
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+  const outcomeLabel = o => {
+    if (o==='WIN')     return `<span class="badge-win">✅ WIN</span>`;
+    if (o==='LOSS')    return `<span class="badge-loss">❌ LOSS</span>`;
+    if (o==='OPEN')    return `<span class="badge-open">⏳ OPEN</span>`;
+    if (o==='SKIPPED') return `<span class="badge-skip">🚫 SKIPPED</span>`;
+    return o;
+  };
+  const pnlClass = p => p == null ? '' : p >= 0 ? 'green' : 'red';
+  const fvClass  = g => g == null ? '' : g > 0 ? 'green' : 'red';
+  const rowClass = o => o==='WIN'?'row-win':o==='LOSS'?'row-loss':o==='OPEN'?'row-open':'';
+  const stopLabel = r => {
+    if (r.stop_reason==='TARGET')     return '🎯 Target';
+    if (r.stop_reason==='EMA_BREAK')  return '🔻 EMA Break';
+    if (r.stop_reason==='MAX_HOLD')   return '⏱ Max Hold';
+    if (r.stop_reason==='OVERVALUED') return '🚫 FV Gate';
+    return '—';
+  };
+
+  // ── MAIN TRADES TABLE ─────────────────────────────────────────────────────
+  const mainHdr = `<tr>
+    <th>Ticker</th><th>Outcome</th><th>Entry Date</th><th>Entry Price</th>
+    <th>Fair Value</th><th>FV Gap %</th><th>Target</th>
+    <th>Exit Date</th><th>Exit Price</th><th>P&amp;L %</th>
+    <th>Hold (C)</th><th>Exit Reason</th><th>BO Date</th><th>CF Date</th>
+  </tr>`;
+
+  const mainTrs = sortedRows.map(r => `
+    <tr class="${rowClass(r.outcome)}" onclick="showDetail(${allTrades.indexOf(r)})" title="Click to see chart">
+      <td class="ticker-cell">${r.ticker}</td>
+      <td>${outcomeLabel(r.outcome)}</td>
+      <td class="mono">${fmtDate(r.entry_date)}</td>
+      <td class="mono amber">${fmtRs(r.entry_price)}</td>
+      <td class="mono">${r.fair_price ? fmtRs(r.fair_price) : '—'}</td>
+      <td class="mono ${fvClass(r.fair_gap_pct)}">${r.fair_gap_pct != null ? (r.fair_gap_pct>=0?'+':'')+fmt(r.fair_gap_pct)+'%' : '—'}</td>
+      <td class="mono">${fmtRs(r.target_price)}</td>
+      <td class="mono">${fmtDate(r.exit_date)}</td>
+      <td class="mono">${fmtRs(r.exit_price)}</td>
+      <td class="mono ${pnlClass(r.pnl_pct)}" style="font-weight:600">${r.pnl_pct != null ? (r.pnl_pct>=0?'+':'')+fmt(r.pnl_pct)+'%' : '—'}</td>
+      <td class="mono">${r.hold_candles ?? '—'}</td>
+      <td class="mono">${stopLabel(r)}</td>
+      <td class="mono">${fmtDate(r.breakout_date)}</td>
+      <td class="mono">${fmtDate(r.confirm_date)}</td>
+    </tr>`).join('');
+
+  const mainEmpty = sortedRows.length === 0
+    ? `<div class="empty-state" style="padding:32px"><div class="empty-icon" style="font-size:28px">🔍</div><div>No trades match this filter</div></div>`
+    : '';
+
+  // ── SKIPPED TRADES TABLE ──────────────────────────────────────────────────
+  // Shows every skipped signal: entry price, fair price, gap — even without P&L
+  const skipHdr = `<tr>
+    <th>Ticker</th><th>BO Date</th><th>CF Date</th>
+    <th>Entry Date</th><th>Entry Price</th>
+    <th>Fair Value</th><th>FV Gap %</th>
+    <th>Would-Be Target</th><th>EMA9 at Entry</th>
+    <th>BO Close</th><th>CF Close</th>
+  </tr>`;
+
+  const skipTrs = skippedRows.map(r => `
+    <tr class="row-skip" onclick="showDetail(${allTrades.indexOf(r)})" title="Click to see chart">
+      <td class="ticker-cell">${r.ticker}</td>
+      <td class="mono">${fmtDate(r.breakout_date)}</td>
+      <td class="mono">${fmtDate(r.confirm_date)}</td>
+      <td class="mono">${fmtDate(r.entry_date)}</td>
+      <td class="mono amber">${fmtRs(r.entry_price)}</td>
+      <td class="mono blue">${r.fair_price ? fmtRs(r.fair_price) : '—'}</td>
+      <td class="mono red" style="font-weight:600">${r.fair_gap_pct != null ? (r.fair_gap_pct>=0?'+':'')+fmt(r.fair_gap_pct)+'%' : '—'}</td>
+      <td class="mono">${fmtRs(r.target_price)}</td>
+      <td class="mono">${r.entry_ema9 ? fmtRs(r.entry_ema9) : '—'}</td>
+      <td class="mono">${fmtRs(r.breakout_close)}</td>
+      <td class="mono">${r.confirm_close ? fmtRs(r.confirm_close) : '—'}</td>
+    </tr>`).join('');
+
+  const skippedSection = skippedRows.length === 0 ? '' : `
+    <div class="content" style="padding-top:28px;padding-bottom:24px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="width:3px;height:16px;background:var(--blue);border-radius:2px"></div>
+        <span style="font-size:11px;color:var(--blue);font-family:var(--font-mono);font-weight:700;letter-spacing:.1em;text-transform:uppercase">
+          🚫 Skipped Signals — Entry Overvalued (${skippedRows.length})
+        </span>
+        <span style="font-size:10px;color:var(--text2);font-family:var(--font-mono)">
+          Signal fired but Entry Price &gt; Fair Value — trade was NOT taken
+        </span>
+      </div>
+      <div style="font-size:10px;color:var(--text2);font-family:var(--font-mono);margin-bottom:8px;line-height:1.6;padding:8px 12px;background:rgba(61,155,255,.06);border:1px solid rgba(61,155,255,.2);border-radius:var(--r-sm)">
+        📌 <strong style="color:var(--blue)">How to read this table:</strong>
+        Entry Price &gt; Fair Value → stock was overvalued at entry → trade skipped by FV gate.
+        FV Gap % is <span style="color:var(--red)">negative</span> = overvalued by that %.
+        Use this to see <em>what you missed</em> and how often the FV gate protects you.
+      </div>
+      <div class="table-wrap" style="border-color:rgba(61,155,255,.3)">
+        <table>
+          <thead style="background:rgba(61,155,255,.06)">${skipHdr}</thead>
+          <tbody>${skipTrs}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  rs.innerHTML = `
+    <div class="content" style="padding-top:16px">
+      <div style="font-size:11px;color:var(--text2);font-family:var(--font-mono);margin-bottom:8px">
+        Showing <span style="color:var(--teal)">${sortedRows.length}</span> trades · Click any row to see chart
+      </div>
+      ${mainEmpty}
+      ${sortedRows.length ? `<div class="table-wrap"><table><thead>${mainHdr}</thead><tbody>${mainTrs}</tbody></table></div>` : ''}
+    </div>
+    ${skippedSection}`;
+
+  // Re-attach detail panel anchor
+  if (!document.getElementById('content-detail-anchor')) {
+    const anchor = document.createElement('div');
+    anchor.id = 'content-detail-anchor';
+    rs.after(anchor);
+  }
+}
+
+// ══════════════════════════════════════════════
+//  DETAIL PANEL
+// ══════════════════════════════════════════════
+function showDetail(idx) {
+  const r = allTrades[idx];
+  if (!r) return;
+  currentDetail = r;
+
+  const panel = document.getElementById('detail-panel');
+  panel.style.display = 'block';
+
+  document.getElementById('d-ticker').textContent = r.ticker;
+  document.getElementById('d-meta').textContent   = `${fmtDate(r.entry_date)} · Entry ${fmtRs(r.entry_price)} · Target ${fmtRs(r.target_price)}`;
+
+  const outBadge = r.outcome==='WIN' ? `<span class="badge-win">✅ WIN +${fmt(r.pnl_pct)}%</span>` :
+                   r.outcome==='LOSS'? `<span class="badge-loss">❌ LOSS ${fmt(r.pnl_pct)}%</span>` :
+                   r.outcome==='OPEN'? `<span class="badge-open">⏳ OPEN TRADE</span>` :
+                   `<span class="badge-skip">🚫 SKIPPED — Overvalued</span>`;
+  document.getElementById('d-badge').innerHTML = outBadge;
+
+  document.getElementById('d-metrics').innerHTML = `
+    <div class="metric-card"><div class="metric-label">Entry Price</div><div class="metric-value amber">${fmtRs(r.entry_price)}</div><div class="metric-sub">${fmtDate(r.entry_date)}</div></div>
+    <div class="metric-card"><div class="metric-label">9 EMA at Entry</div><div class="metric-value">${fmtRs(r.entry_ema9)}</div></div>
+    <div class="metric-card"><div class="metric-label">Fair Value</div><div class="metric-value">${r.fair_price ? fmtRs(r.fair_price) : '—'}</div><div class="metric-sub">${r.fair_gap_pct != null ? (r.fair_gap_pct>=0?'↑ Upside':'↓ Overvalued')+' '+Math.abs(r.fair_gap_pct).toFixed(1)+'%':'No FV data'}</div></div>
+    <div class="metric-card"><div class="metric-label">Target Price (+${document.getElementById('inp-target').value}%)</div><div class="metric-value green">${fmtRs(r.target_price)}</div></div>
+    <div class="metric-card"><div class="metric-label">Exit Price</div><div class="metric-value ${r.pnl_pct!=null&&r.pnl_pct>=0?'green':'red'}">${fmtRs(r.exit_price)}</div><div class="metric-sub">${fmtDate(r.exit_date)}</div></div>
+    <div class="metric-card"><div class="metric-label">P&amp;L</div><div class="metric-value ${r.pnl_pct!=null&&r.pnl_pct>=0?'green':'red'}" style="font-size:18px">${r.pnl_pct!=null?(r.pnl_pct>=0?'+':'')+fmt(r.pnl_pct)+'%':'—'}</div></div>
+    <div class="metric-card"><div class="metric-label">Hold Candles</div><div class="metric-value">${r.hold_candles ?? '—'}</div></div>
+    <div class="metric-card"><div class="metric-label">Exit Reason</div><div class="metric-value amber" style="font-size:12px">${r.stop_reason||'—'}</div></div>`;
+
+  renderTradeChart(r);
+  panel.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').style.display = 'none';
+  currentDetail = null;
+}
+
+function renderTradeChart(r) {
+  if (!r._candles || !r._candles.length) {
+    document.getElementById('detail-chart').innerHTML =
+      `<div class="empty-state" style="padding:20px"><div>No chart data — backend not connected</div></div>`;
+    return;
+  }
+
+  const c     = r._candles;
+  const ema9  = r._ema9;
+  const n     = c.length;
+
+  // Show context window: 10 bars before breakout to 10 bars after exit (or end)
+  const startIdx = Math.max(0, r.breakout_idx - 10);
+  const endIdx   = Math.min(n - 1, (r.exit_idx != null ? r.exit_idx : r.entry_idx) + 10);
+
+  const slice   = c.slice(startIdx, endIdx + 1);
+  const sliceE9 = ema9.slice(startIdx, endIdx + 1);
+
+  const dates  = slice.map(x => x.date);
+  const opens  = slice.map(x => x.open);
+  const highs  = slice.map(x => x.high);
+  const lows   = slice.map(x => x.low);
+  const closes = slice.map(x => x.close);
+  const vols   = slice.map(x => x.volume);
+
+  // Mapped indices in slice
+  const boI   = r.breakout_idx - startIdx;
+  const cfI   = r.confirm_idx  - startIdx;
+  const enI   = r.entry_idx    - startIdx;
+  const exI   = r.exit_idx != null ? r.exit_idx - startIdx : null;
+
+  const candleTrace = {
+    type:'candlestick', x:dates, open:opens, high:highs, low:lows, close:closes,
+    name:'Price', increasing:{line:{color:'#00d4b1'},fillcolor:'#00d4b1'},
+    decreasing:{line:{color:'#ff3b5c'},fillcolor:'#ff3b5c'}, yaxis:'y',
+  };
+
+  const ema9Trace = {
+    type:'scatter', mode:'lines', name:'9 EMA',
+    x:dates, y:sliceE9, line:{color:'#ff7b29',width:2}, yaxis:'y',
+  };
+
+  // Target & Stop lines
+  const extraTraces = [];
+  if (r.entry_price && enI >= 0 && enI < dates.length) {
+    extraTraces.push({
+      type:'scatter', mode:'lines', name:`Target ${fmtRs(r.target_price)}`,
+      x:[dates[enI], dates[dates.length-1]],
+      y:[r.target_price, r.target_price],
+      line:{color:'#00d97e', width:1, dash:'dot'}, yaxis:'y', showlegend:true,
+    });
+    extraTraces.push({
+      type:'scatter', mode:'lines', name:`Entry ${fmtRs(r.entry_price)}`,
+      x:[dates[enI], dates[dates.length-1]],
+      y:[r.entry_price, r.entry_price],
+      line:{color:'#ff7b29', width:1, dash:'dash'}, yaxis:'y', showlegend:true,
+    });
+    if (r.fair_price) {
+      extraTraces.push({
+        type:'scatter', mode:'lines', name:`Fair Value ${fmtRs(r.fair_price)}`,
+        x:[dates[0], dates[dates.length-1]],
+        y:[r.fair_price, r.fair_price],
+        line:{color:'#a78bfa', width:1, dash:'dashdot'}, yaxis:'y', showlegend:true,
+      });
+    }
+  }
+
+  // Marker helpers
+  const mkMarker = (idxs, texts, color, symbol) => ({
+    type:'scatter', mode:'markers+text',
+    x: idxs.filter(i=>i>=0&&i<dates.length).map(i=>dates[i]),
+    y: idxs.filter(i=>i>=0&&i<dates.length).map(i=>lows[i]*0.995),
+    text: texts,
+    textposition:'top center',
+    marker:{size:14, symbol, color},
+    textfont:{size:9, color},
+    yaxis:'y', showlegend:false,
+  });
+
+  const boMark = mkMarker([boI],['BO'], '#00d97e', 'triangle-up');
+  const cfMark = mkMarker([cfI],['CF'], '#3d9bff', 'triangle-up');
+  const enMark = mkMarker([enI],['ENTRY'], '#ff7b29', 'diamond');
+  const exMark = exI != null ? mkMarker([exI], [r.outcome==='WIN'?'TARGET':'EXIT'], r.outcome==='WIN'?'#00d97e':'#ff3b5c', r.outcome==='WIN'?'star':'x') : null;
+
+  const volColors = slice.map((x,i)=>{
+    if (i===boI) return '#00d97e80';
+    if (i===cfI) return '#3d9bff80';
+    if (i===enI) return '#ff7b2980';
+    if (exI!=null&&i===exI) return r.outcome==='WIN'?'#00d97e80':'#ff3b5c80';
+    return x.close >= x.open ? '#00d4b130' : '#ff3b5c30';
+  });
+
+  const volTrace = {
+    type:'bar', name:'Volume', x:dates, y:vols,
+    marker:{color:volColors}, yaxis:'y2', showlegend:false,
+  };
+
+  const traces = [candleTrace, ema9Trace, ...extraTraces, boMark, cfMark, enMark];
+  if (exMark) traces.push(exMark);
+  traces.push(volTrace);
+
+  Plotly.newPlot('detail-chart', traces, {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    font:{family:'JetBrains Mono, monospace', size:10, color:'#4d6b8a'},
+    xaxis:{type:'category', showgrid:false, linecolor:'#1a3150', tickcolor:'#1a3150', tickfont:{size:9}, rangeslider:{visible:false}},
+    yaxis:{side:'right', showgrid:true, gridcolor:'#1a3150', gridwidth:1, linecolor:'#1a3150', tickfont:{size:9}, domain:[0.25,1]},
+    yaxis2:{side:'left', overlaying:'y', domain:[0,0.2], showgrid:false, showticklabels:false},
+    legend:{x:0, y:1.15, orientation:'h', bgcolor:'transparent', font:{size:9}},
+    margin:{l:10, r:65, t:30, b:40},
+    hovermode:'x unified',
+    hoverlabel:{bgcolor:'#0c1929', bordercolor:'#1e4a72', font:{size:10}},
+  }, {responsive:true, displayModeBar:false});
+}
+
+// ══════════════════════════════════════════════
+//  CSV EXPORT
+// ══════════════════════════════════════════════
+function exportCSV() {
+  const rows = getFilteredSorted();
+  if (!rows.length) { toast('warn','Nothing to export'); return; }
+
+  const headers = ['ticker','outcome','entry_date','entry_price','fair_price','fair_gap_pct','target_price','exit_date','exit_price','pnl_pct','hold_candles','stop_reason','breakout_date','breakout_close','confirm_date','confirm_close'];
+  const csv = [headers.join(',')];
+  rows.forEach(r => {
+    csv.push(headers.map(h => {
+      const v = r[h];
+      if (v == null) return '';
+      if (typeof v === 'string' && v.includes(',')) return `"${v}"`;
+      return v;
+    }).join(','));
+  });
+
+  const blob = new Blob([csv.join('\n')], {type:'text/csv'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `9ema_backtest_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  toast('success','CSV exported', `${rows.length} rows downloaded`);
+}
+
+// ══════════════════════════════════════════════
+//  STOCK-WISE SUMMARY (auto renders below table)
+// ══════════════════════════════════════════════
+function stockWiseSummary() {
+  const byTicker = {};
+  allTrades.forEach(t => {
+    if (!byTicker[t.ticker]) byTicker[t.ticker] = [];
+    byTicker[t.ticker].push(t);
+  });
+  const rows = Object.entries(byTicker).map(([ticker, trades]) => {
+    const s = computeStats(trades);
+    return { ticker, total:trades.length, wins:s.wins.length, losses:s.losses.length, open:s.open.length, skipped:s.skipped.length, winRate:s.winRate, totalPnl:s.totalPnl, avgHold:s.avgHold };
+  });
+  rows.sort((a,b) => b.winRate - a.winRate);
+  return rows;
+}
+</script>
+</body>
+</html>

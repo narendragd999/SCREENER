@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>NSE Option Charts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root{
+  --bg0:#030912;--bg1:#070f1c;--bg2:#0c1929;--bg3:#101f30;--bg4:#162840;
+  --border:#1a3150;--border-hi:#1e4a72;
+  --teal:#00d4b1;--teal-dim:#007a68;--teal-glow:rgba(0,212,177,.15);
+  --amber:#ff7b29;--amber-glow:rgba(255,123,41,.15);
+  --blue:#3d9bff;--blue-glow:rgba(61,155,255,.15);
+  --red:#ff3b5c;--red-glow:rgba(255,59,92,.15);
+  --green:#00d97e;--green-glow:rgba(0,217,126,.12);
+  --text0:#e8edf5;--text1:#9ab2cc;--text2:#4d6b8a;--text3:#2a4060;
+  --font-ui:'Exo 2',sans-serif;--font-mono:'JetBrains Mono',monospace;
+  --r:8px;--r-sm:5px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:var(--font-ui);background:var(--bg0);color:var(--text0);overflow-x:hidden}
+body{
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%,rgba(0,100,200,.08) 0%,transparent 70%),
+    repeating-linear-gradient(0deg,transparent,transparent 39px,var(--border) 39px,var(--border) 40px),
+    repeating-linear-gradient(90deg,transparent,transparent 39px,var(--border) 39px,var(--border) 40px);
+  background-size:100% 100%,40px 40px,40px 40px;
+  background-attachment:fixed;
+}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg1)}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+
+/* ── HEADER ── */
+header{
+  display:flex;align-items:center;gap:0;height:54px;min-height:54px;
+  padding:0 20px;
+  background:linear-gradient(180deg,rgba(0,20,40,.95) 0%,rgba(7,15,28,.97) 100%);
+  border-bottom:1px solid var(--border-hi);position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(10px);
+}
+.logo-wrap{display:flex;align-items:center;gap:10px;margin-right:24px}
+.logo-icon{
+  width:32px;height:32px;
+  background:linear-gradient(135deg,var(--teal) 0%,var(--blue) 100%);
+  border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:800;color:#000;font-family:var(--font-mono);
+  box-shadow:0 0 20px rgba(0,212,177,.4);
+}
+.logo-title{font-size:15px;font-weight:700;letter-spacing:.04em;color:var(--text0)}
+.logo-sub{font-size:10px;letter-spacing:.1em;color:var(--text2);margin-top:2px;font-family:var(--font-mono);text-transform:uppercase}
+.back-link{
+  display:inline-flex;align-items:center;gap:6px;
+  color:var(--text2);text-decoration:none;font-size:12px;font-weight:600;
+  padding:5px 12px;border-radius:var(--r-sm);border:1px solid var(--border);
+  transition:all .15s;margin-left:auto;
+}
+.back-link:hover{color:var(--teal);border-color:var(--teal-dim);background:var(--teal-glow)}
+.header-clock{
+  font-family:var(--font-mono);font-size:13px;font-weight:500;
+  color:var(--teal);letter-spacing:.05em;
+  padding:0 14px;border-left:1px solid var(--border);height:54px;
+  display:flex;align-items:center;margin-left:16px;
+}
+
+/* ── LAYOUT ── */
+#app{display:flex;flex-direction:column;min-height:calc(100vh - 54px)}
+.filter-bar{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;
+  padding:18px 24px;
+  background:var(--bg1);border-bottom:1px solid var(--border);
+}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:10px;letter-spacing:.1em;color:var(--text2);text-transform:uppercase;font-family:var(--font-mono)}
+.field input,.field select{
+  background:var(--bg2);border:1px solid var(--border);
+  color:var(--text0);font-family:var(--font-mono);font-size:12px;
+  padding:7px 10px;border-radius:var(--r-sm);outline:none;width:100%;
+  transition:border-color .15s,box-shadow .15s;
+}
+.field input:focus,.field select:focus{
+  border-color:var(--teal-dim);box-shadow:0 0 0 2px var(--teal-glow);
+}
+.field select{
+  cursor:pointer;appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234d6b8a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;
+}
+.field-row{display:flex;gap:8px;align-items:flex-end}
+.filter-actions{
+  display:flex;align-items:flex-end;gap:8px;padding-bottom:0;
+}
+
+/* ── BUTTONS ── */
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:7px 16px;border-radius:var(--r-sm);font-size:12px;font-weight:600;
+  letter-spacing:.04em;cursor:pointer;border:1px solid transparent;
+  font-family:var(--font-ui);white-space:nowrap;transition:all .15s;
+}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary{background:var(--teal);color:#000;box-shadow:0 0 12px rgba(0,212,177,.3)}
+.btn-primary:hover:not(:disabled){background:#00ffe0;box-shadow:0 0 20px rgba(0,212,177,.5)}
+.btn-outline{background:transparent;color:var(--text1);border-color:var(--border-hi)}
+.btn-outline:hover:not(:disabled){background:var(--bg3);color:var(--text0);border-color:var(--teal-dim)}
+.btn-danger{background:var(--red-glow);color:var(--red);border-color:rgba(255,59,92,.3)}
+.btn-sm{padding:5px 11px;font-size:11px}
+
+/* ── METRICS ── */
+.metrics-row{
+  display:flex;gap:12px;padding:16px 24px 0;flex-wrap:wrap;
+}
+.metric-card{
+  flex:1;min-width:130px;background:var(--bg1);border:1px solid var(--border);
+  border-radius:var(--r);padding:12px 16px;
+}
+.metric-label{font-size:9px;letter-spacing:.12em;color:var(--text2);text-transform:uppercase;font-family:var(--font-mono)}
+.metric-value{font-family:var(--font-mono);font-size:18px;font-weight:600;color:var(--teal);margin-top:4px}
+.metric-sub{font-size:10px;color:var(--text2);margin-top:2px}
+
+/* ── CHART AREA ── */
+.chart-section{padding:20px 24px}
+.section-title{
+  font-size:11px;font-weight:700;letter-spacing:.1em;
+  color:var(--text2);text-transform:uppercase;margin-bottom:12px;
+  display:flex;align-items:center;gap:8px;
+}
+.section-title::before{content:'';display:inline-block;width:3px;height:12px;background:var(--teal);border-radius:2px}
+
+/* ── TABLE ── */
+.table-wrap{overflow-x:auto;border-radius:var(--r);border:1px solid var(--border);background:var(--bg1)}
+table{width:100%;border-collapse:collapse;font-size:11px}
+thead tr{background:var(--bg2);border-bottom:1px solid var(--border-hi)}
+th{padding:8px 12px;text-align:left;font-size:9px;font-weight:600;letter-spacing:.1em;color:var(--text2);text-transform:uppercase;font-family:var(--font-mono);white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border)}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--bg2)}
+td{padding:8px 12px;color:var(--text1);white-space:nowrap;font-family:var(--font-mono);font-size:11px}
+td.green{color:var(--green)}
+td.red{color:var(--red)}
+
+/* ── EXPANDER ── */
+.expander{margin:0 24px 20px}
+.expander-header{
+  display:flex;align-items:center;gap:8px;cursor:pointer;
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:9px 14px;font-size:11px;font-weight:600;color:var(--text2);
+  user-select:none;transition:background .15s;
+}
+.expander-header:hover{background:var(--bg3);color:var(--text1)}
+.expander-body{display:none;margin-top:4px}
+.expander-body.open{display:block}
+.expander-arrow{margin-left:auto;transition:transform .2s}
+.expander-header.open .expander-arrow{transform:rotate(180deg)}
+
+/* ── EMPTY / LOADING ── */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:60px 20px;color:var(--text2);font-size:13px;gap:10px;
+}
+.empty-icon{font-size:44px;opacity:.5}
+.empty-title{font-size:14px;font-weight:600;color:var(--text1)}
+.spinner{
+  width:36px;height:36px;border-radius:50%;
+  border:3px solid var(--bg4);border-top-color:var(--teal);
+  animation:spin .9s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── TOAST ── */
+#toast{
+  position:fixed;top:70px;right:20px;z-index:2000;
+  display:flex;flex-direction:column;gap:8px;pointer-events:none;
+}
+.toast{
+  display:flex;align-items:flex-start;gap:10px;padding:12px 16px;
+  border-radius:var(--r);min-width:280px;max-width:380px;
+  background:var(--bg2);border:1px solid var(--border);
+  box-shadow:0 8px 32px rgba(0,0,0,.5);animation:slideIn .25s ease;pointer-events:all;
+}
+@keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+.toast.fade-out{animation:slideOut .3s ease forwards}
+@keyframes slideOut{to{transform:translateX(20px);opacity:0}}
+.toast-icon{font-size:15px}
+.toast-title{font-size:12px;font-weight:600;color:var(--text0)}
+.toast-msg{font-size:11px;color:var(--text2);line-height:1.4}
+.toast.success{border-color:rgba(0,217,126,.35);background:rgba(0,217,126,.06)}
+.toast.error{border-color:rgba(255,59,92,.35);background:rgba(255,59,92,.06)}
+.toast.warn{border-color:rgba(255,123,41,.35);background:rgba(255,123,41,.06)}
+
+/* ── QUICK RANGE PILLS ── */
+.range-pills{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.range-pill{
+  padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;
+  cursor:pointer;border:1px solid var(--border);color:var(--text2);background:var(--bg2);
+  font-family:var(--font-mono);letter-spacing:.05em;transition:all .15s;
+}
+.range-pill:hover{border-color:var(--teal-dim);color:var(--teal)}
+.range-pill.active{background:var(--teal-glow);color:var(--teal);border-color:var(--teal-dim)}
+
+/* ── DOWNLOAD BTN ── */
+.download-bar{padding:0 24px 20px;display:flex;gap:10px;align-items:center}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-wrap">
+    <div class="logo-icon">📈</div>
+    <div>
+      <div class="logo-title">Option Charts</div>
+      <div class="logo-sub">NSE Historical OHLC</div>
+    </div>
+  </div>
+  <a class="back-link" href="/">← NSE Screener</a>
+  <div class="header-clock" id="header-clock">00:00:00</div>
+</header>
+
+<div id="app">
+
+  <!-- ── FILTER BAR ── -->
+  <div class="filter-bar">
+
+    <div class="field">
+      <label>Stock Symbol *</label>
+      <select id="inp-symbol"><option value="">Loading…</option></select>
+    </div>
+
+    <div class="field">
+      <label>Instrument Type *</label>
+      <select id="inp-instrument">
+        <option value="OPTSTK">OPTSTK</option>
+        <option value="OPTIDX">OPTIDX</option>
+        <option value="FUTIDX">FUTIDX</option>
+        <option value="FUTSTK">FUTSTK</option>
+        <option value="FUTIVX">FUTIVX</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Option Type *</label>
+      <select id="inp-option-type">
+        <option value="CE">CE — Call</option>
+        <option value="PE">PE — Put</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Strike Price *</label>
+      <input type="number" id="inp-strike" placeholder="e.g. 1700" min="1" step="50"/>
+    </div>
+
+    <div class="field">
+      <label>Expiry Date * (DD-MM-YYYY)</label>
+      <input type="text" id="inp-expiry" placeholder="26-06-2025"/>
+    </div>
+
+    <div class="field">
+      <label>Quick Range</label>
+      <div class="range-pills">
+        <span class="range-pill" data-range="1D">1D</span>
+        <span class="range-pill" data-range="1W">1W</span>
+        <span class="range-pill active" data-range="1M">1M</span>
+        <span class="range-pill" data-range="1.5M">1.5M</span>
+        <span class="range-pill" data-range="3M">3M</span>
+        <span class="range-pill" data-range="Custom">Custom</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>From Date * (DD-MM-YYYY)</label>
+      <input type="text" id="inp-from" placeholder="01-05-2025"/>
+    </div>
+
+    <div class="field">
+      <label>To Date * (DD-MM-YYYY)</label>
+      <input type="text" id="inp-to" placeholder="26-06-2025"/>
+    </div>
+
+    <div class="filter-actions">
+      <button class="btn btn-primary" id="btn-fetch">🔍 Fetch Data</button>
+      <button class="btn btn-outline" id="btn-clear">✕ Clear</button>
+    </div>
+
+  </div>
+
+  <!-- ── RESULTS ── -->
+  <div id="results-area">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">📈</div>
+      <div class="empty-title">No data loaded yet</div>
+      <div>Fill the filters above and click <strong>Fetch Data</strong></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════
+const API = {
+  async get(path) {
+    const r = await fetch(path);
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
+  async post(path, body) {
+    const r = await fetch(path, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) {
+      const msg = await r.text();
+      let parsed;
+      try { parsed = JSON.parse(msg); } catch(e) { parsed = {detail: msg}; }
+      throw new Error(parsed.detail || msg);
+    }
+    return r.json();
+  }
+};
+
+function toast(type, title, msg='') {
+  const icons = {success:'✅', error:'❌', warn:'⚠️'};
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ️'}</span>
+    <div><div class="toast-title">${title}</div>${msg?`<div class="toast-msg">${msg}</div>`:''}</div>`;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => { el.classList.add('fade-out'); setTimeout(()=>el.remove(),350); }, 4000);
+}
+
+function fmt(n, dec=2) {
+  if (n==null) return '—';
+  return parseFloat(n).toFixed(dec);
+}
+
+// ═══════════════════════════════════════
+//  CLOCK
+// ═══════════════════════════════════════
+setInterval(() => {
+  const ist = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Kolkata'}));
+  document.getElementById('header-clock').textContent = ist.toTimeString().slice(0,8);
+}, 1000);
+
+// ═══════════════════════════════════════
+//  LOAD TICKERS + META
+// ═══════════════════════════════════════
+async function loadMeta() {
+  try {
+    const m = await API.get('/api/option-charts/meta');
+    const sel = document.getElementById('inp-symbol');
+    sel.innerHTML = m.tickers.length
+      ? m.tickers.map(t=>`<option value="${t}">${t}</option>`).join('')
+      : '<option value="">No tickers (upload tickers.csv)</option>';
+  } catch(e) {
+    document.getElementById('inp-symbol').innerHTML = '<option value="">Error loading tickers</option>';
+  }
+}
+
+// ═══════════════════════════════════════
+//  QUICK RANGE DATE FILL
+// ═══════════════════════════════════════
+const RANGE_DAYS = {'1D':1,'1W':7,'1M':30,'1.5M':45,'3M':90};
+let activeRange = '1M';
+
+function parseDate(str) {
+  const [d,m,y] = str.split('-');
+  return new Date(`${y}-${m}-${d}`);
+}
+function fmtDate(dt) {
+  return `${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}-${dt.getFullYear()}`;
+}
+
+document.querySelectorAll('.range-pill').forEach(p => {
+  p.addEventListener('click', () => {
+    document.querySelectorAll('.range-pill').forEach(x=>x.classList.remove('active'));
+    p.classList.add('active');
+    activeRange = p.dataset.range;
+    if (activeRange !== 'Custom') applyRange();
+  });
+});
+
+function applyRange() {
+  const expiryStr = document.getElementById('inp-expiry').value.trim();
+  if (!expiryStr || activeRange === 'Custom') return;
+  try {
+    const expiryDt = parseDate(expiryStr);
+    const days = RANGE_DAYS[activeRange] || 30;
+    const fromDt = new Date(expiryDt);
+    fromDt.setDate(fromDt.getDate() - days);
+    document.getElementById('inp-from').value = fmtDate(fromDt);
+    document.getElementById('inp-to').value   = fmtDate(expiryDt);
+  } catch(e) {}
+}
+
+document.getElementById('inp-expiry').addEventListener('change', applyRange);
+// Auto-fill range on expiry key blur
+document.getElementById('inp-expiry').addEventListener('blur', applyRange);
+
+// ═══════════════════════════════════════
+//  FETCH DATA
+// ═══════════════════════════════════════
+document.getElementById('btn-fetch').addEventListener('click', fetchData);
+document.getElementById('btn-clear').addEventListener('click', clearResults);
+
+async function fetchData() {
+  const symbol       = document.getElementById('inp-symbol').value;
+  const instrument   = document.getElementById('inp-instrument').value;
+  const optType      = document.getElementById('inp-option-type').value;
+  const strikeRaw    = document.getElementById('inp-strike').value;
+  const expiry       = document.getElementById('inp-expiry').value.trim();
+  const from         = document.getElementById('inp-from').value.trim();
+  const to           = document.getElementById('inp-to').value.trim();
+
+  if (!symbol)            { toast('warn','Select a symbol'); return; }
+  if (!strikeRaw || parseInt(strikeRaw)<=0) { toast('warn','Enter a valid strike price'); return; }
+  if (!expiry)            { toast('warn','Enter expiry date (DD-MM-YYYY)'); return; }
+  if (!from || !to)       { toast('warn','Enter from and to dates'); return; }
+
+  showLoading();
+  const btn = document.getElementById('btn-fetch');
+  btn.disabled = true;
+
+  try {
+    const data = await API.post('/api/option-charts/fetch', {
+      symbol, instrument_type: instrument, expiry_date: expiry,
+      option_type: optType, strike_price: parseInt(strikeRaw),
+      from_date: from, to_date: to,
+    });
+    renderResults(data);
+    toast('success', `${data.rows} rows loaded`, `${data.symbol} ${data.option_type} ${data.strike} — ${data.expiry}`);
+  } catch(err) {
+    showEmpty();
+    toast('error', 'Fetch failed', err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function showLoading() {
+  document.getElementById('results-area').innerHTML = `
+    <div class="empty-state">
+      <div class="spinner"></div>
+      <div class="empty-title">Contacting NSE…</div>
+      <div style="font-size:11px;color:var(--text3)">Warming up session + fetching data</div>
+    </div>`;
+}
+function showEmpty() {
+  document.getElementById('results-area').innerHTML = `
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">📈</div>
+      <div class="empty-title">No data loaded yet</div>
+      <div>Fill the filters above and click <strong>Fetch Data</strong></div>
+    </div>`;
+}
+function clearResults() {
+  showEmpty();
+  document.getElementById('inp-strike').value = '';
+}
+
+// ═══════════════════════════════════════
+//  RENDER RESULTS
+// ═══════════════════════════════════════
+function renderResults(res) {
+  const { symbol, expiry, strike, option_type, rows, last_close, last_ltp, data } = res;
+  const last = data[data.length-1] || {};
+
+  const html = `
+    <div class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-label">Last Close</div>
+        <div class="metric-value">₹${fmt(last_close)}</div>
+        <div class="metric-sub">${option_type} option</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Last LTP</div>
+        <div class="metric-value">₹${fmt(last_ltp)}</div>
+        <div class="metric-sub">Last traded price</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Strike Price</div>
+        <div class="metric-value">₹${strike}</div>
+        <div class="metric-sub">${option_type}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Expiry</div>
+        <div class="metric-value" style="font-size:14px">${expiry}</div>
+        <div class="metric-sub">${symbol}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Rows Fetched</div>
+        <div class="metric-value">${rows}</div>
+        <div class="metric-sub">trading days</div>
+      </div>
+    </div>
+
+    <div class="chart-section">
+      <div class="section-title">${symbol} ${option_type} ${strike} — ${expiry}</div>
+      <div id="main-chart" style="height:520px"></div>
+    </div>
+
+    <div class="download-bar">
+      <button class="btn btn-outline btn-sm" id="btn-download-csv">⬇ Download CSV</button>
+    </div>
+
+    <div class="expander">
+      <div class="expander-header" id="table-toggle">
+        📋 Raw Data Table
+        <span class="expander-arrow">▼</span>
+      </div>
+      <div class="expander-body" id="table-body">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Date</th><th>Open</th><th>High</th><th>Low</th><th>Close</th>
+              <th>LTP</th><th>Volume</th><th>OI</th><th>Chg OI</th><th>Underlying</th>
+            </tr></thead>
+            <tbody>
+              ${data.map(r => `<tr>
+                <td>${r.date||'—'}</td>
+                <td>₹${fmt(r.open)}</td>
+                <td class="green">₹${fmt(r.high)}</td>
+                <td class="red">₹${fmt(r.low)}</td>
+                <td>₹${fmt(r.close)}</td>
+                <td>₹${fmt(r.ltp)}</td>
+                <td>${r.volume!=null?Math.round(r.volume).toLocaleString():'—'}</td>
+                <td>${r.oi!=null?Math.round(r.oi).toLocaleString():'—'}</td>
+                <td>${fmt(r.change_oi,0)}</td>
+                <td>₹${fmt(r.underlying)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('results-area').innerHTML = html;
+
+  // Expander toggle
+  document.getElementById('table-toggle').addEventListener('click', function() {
+    this.classList.toggle('open');
+    document.getElementById('table-body').classList.toggle('open');
+  });
+
+  // CSV download
+  document.getElementById('btn-download-csv').addEventListener('click', () => {
+    downloadCSV(data, `${symbol}_${option_type}_${strike}_${expiry}.csv`);
+  });
+
+  // Chart
+  renderChart(data, symbol, expiry, strike, option_type);
+}
+
+// ═══════════════════════════════════════
+//  CHART
+// ═══════════════════════════════════════
+function renderChart(data, symbol, expiry, strike, optType) {
+  const dates   = data.map(r => r.date);
+  const opens   = data.map(r => r.open);
+  const highs   = data.map(r => r.high);
+  const lows    = data.map(r => r.low);
+  const closes  = data.map(r => r.close);
+  const volumes = data.map(r => r.volume);
+  const hasVol  = volumes.some(v => v != null && v > 0);
+
+  const candleTrace = {
+    type: 'candlestick',
+    x: dates, open: opens, high: highs, low: lows, close: closes,
+    name: 'OHLC',
+    increasing: { line:{color:'#00d97e'}, fillcolor:'rgba(0,217,126,0.25)' },
+    decreasing: { line:{color:'#ff3b5c'}, fillcolor:'rgba(255,59,92,0.25)' },
+  };
+
+  const traces = [candleTrace];
+
+  if (hasVol) {
+    const colors = data.map(r => r.close >= r.open ? 'rgba(0,217,126,0.4)' : 'rgba(255,59,92,0.4)');
+    traces.push({
+      type:'bar', name:'Volume',
+      x: dates, y: volumes, marker:{color: colors},
+      yaxis:'y2', opacity:0.6,
+    });
+  }
+
+  const layout = {
+    title: { text:`<b>${symbol}</b> ${optType} ${strike} — Exp: ${expiry}`, font:{color:'#e8edf5',size:13} },
+    paper_bgcolor:'#070f1c', plot_bgcolor:'#070f1c',
+    font:{ family:"'JetBrains Mono',monospace", size:11, color:'#7a91b0' },
+    margin:{l:60,r:60,t:50,b:50},
+    xaxis:{
+      gridcolor:'#1a3150', zerolinecolor:'#1a3150',
+      rangeslider:{visible:false}, tickfont:{size:10},
+      showspikes:true, spikecolor:'#4d6b8a', spikethickness:1,
+      rangebreaks:[{bounds:['sat','mon']}],
+    },
+    yaxis:{
+      gridcolor:'#1a3150', side:'right', tickprefix:'₹',
+      showspikes:true, spikecolor:'#4d6b8a',
+    },
+    yaxis2: hasVol ? {
+      overlaying:'y', side:'left', showgrid:false,
+      title:{text:'Volume',font:{size:10,color:'#4d6b8a'}},
+      titlefont:{size:10},
+    } : undefined,
+    legend:{bgcolor:'rgba(0,0,0,0)',font:{size:10}},
+    dragmode:'pan',
+    autosize:true,
+  };
+
+  Plotly.react('main-chart', traces, layout, {
+    responsive:true, scrollZoom:true,
+    displayModeBar:true, modeBarButtonsToRemove:['lasso2d','select2d'],
+  });
+}
+
+// ═══════════════════════════════════════
+//  CSV DOWNLOAD
+// ═══════════════════════════════════════
+function downloadCSV(data, filename) {
+  if (!data.length) return;
+  const keys = Object.keys(data[0]);
+  const csv  = [keys.join(','),
+    ...data.map(r => keys.map(k => r[k]??'').join(','))
+  ].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = filename;
+  a.click();
+}
+
+// ═══════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════
+async function init() {
+  await loadMeta();
+  // Default from/to = last 1 month till today
+  const today  = new Date();
+  const from30 = new Date(); from30.setDate(today.getDate()-30);
+  document.getElementById('inp-to').value   = fmtDate(today);
+  document.getElementById('inp-from').value = fmtDate(from30);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
