@@ -330,6 +330,10 @@ tailwind.config = {
           class="tab-btn px-4 py-1.5 rounded-md font-ui text-xs font-600 transition-all duration-200">
           📡 Chartink
         </button>
+        <button id="tabClauseScan" onclick="switchTab('clausescan')"
+          class="tab-btn px-4 py-1.5 rounded-md font-ui text-xs font-600 transition-all duration-200">
+          🔍 Clause Scan
+        </button>
       </div>
       <span id="clock"></span>
     </div>
@@ -607,6 +611,17 @@ tailwind.config = {
         </button>
       </div>
     </div>
+    <div class="mt-4 flex items-center gap-2 flex-wrap" id="chartinkClauseSelectorRow">
+      <span class="font-mono text-xs text-slate-500 shrink-0">Active clause(s):</span>
+      <div id="chartinkClauseCheckboxes" class="flex items-center gap-2 flex-wrap"></div>
+      <button onclick="ckLoadClauseOptions()"
+        class="font-mono text-xs text-accent2 hover:underline ml-1" title="Refresh from Clause Scan tab">
+        refresh
+      </button>
+      <span id="chartinkClauseSelectorEmpty" class="hidden font-mono text-xs text-slate-600">
+        No saved clauses yet &mdash; add some in the Clause Scan tab.
+      </span>
+    </div>
     <div class="mt-3 flex items-center gap-2 text-xs font-mono text-slate-600">
       <span>Last scan:</span>
       <span id="chartinkLastRun">never</span>
@@ -767,6 +782,109 @@ tailwind.config = {
   </section>
 
 </div><!-- /chartinkPanel -->
+
+<!-- ═══════════════ MULTI-CLAUSE SCANNER PANEL ═══════════════ -->
+<div id="clauseScanPanel" class="hidden space-y-8">
+
+  <!-- ═══════════════ CONTROL BAR ═══════════════ -->
+  <section class="glass-card rounded-2xl p-6">
+    <div class="flex items-center justify-between flex-wrap gap-4">
+      <div class="flex items-center gap-2">
+        <svg class="w-5 h-5 text-accent2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/>
+        </svg>
+        <h2 class="font-ui text-lg font-700 text-white">Multi-Clause Scanner</h2>
+        <span id="csClauseCount" class="font-mono text-xs bg-accent2/10 text-accent2 px-2 py-0.5 rounded-full ml-1">0 saved</span>
+        <span class="text-xs font-mono text-slate-500 ml-2">Save Chartink scan clauses by name &bull; run any combination on demand</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="csStatusText" class="font-mono text-xs text-slate-500"></span>
+        <button id="csNewClauseBtn" onclick="csOpenAddForm()"
+          class="px-4 py-2 rounded-lg font-ui font-600 text-xs
+                 bg-card2 border border-border/50 text-accent2
+                 hover:border-accent2/50 transition-all duration-200">
+          + New Clause
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ ADD / EDIT CLAUSE FORM ═══════════════ -->
+  <section id="csFormSection" class="hidden glass-card rounded-2xl p-6">
+    <h3 id="csFormTitle" class="font-ui text-sm font-700 text-white mb-4">Add New Clause</h3>
+    <div class="space-y-3">
+      <div>
+        <label class="font-ui text-xs text-slate-500 block mb-1">Clause Name</label>
+        <input id="csClauseNameInput" type="text" placeholder="e.g. ema9_15min_breakout"
+          class="w-full bg-card2 border border-border/50 rounded-lg px-3 py-2 font-mono text-sm text-slate-200
+                 focus:outline-none focus:border-accent2/50">
+      </div>
+      <div>
+        <label class="font-ui text-xs text-slate-500 block mb-1">Scan Clause (Chartink syntax)</label>
+        <textarea id="csClauseTextInput" rows="3" placeholder="( {33489} ( [0] 5 minute close > [0] 5 minute ema( close,9 ) and [ -1 ] 5 minute close <= [ -1 ] 5 minute ema( close,9 ) ) )"
+          class="w-full bg-card2 border border-border/50 rounded-lg px-3 py-2 font-mono text-xs text-slate-200
+                 focus:outline-none focus:border-accent2/50"></textarea>
+      </div>
+      <p id="csFormError" class="hidden text-xs font-mono text-danger"></p>
+      <div class="flex items-center gap-3">
+        <button id="csSaveClauseBtn" onclick="csSaveClause()"
+          class="px-4 py-2 rounded-lg font-ui font-600 text-xs
+                 bg-gradient-to-r from-accent2 to-accent text-base
+                 hover:shadow-lg hover:shadow-accent2/20 transition-all duration-200">
+          Save Clause
+        </button>
+        <button onclick="csCancelForm()"
+          class="px-4 py-2 rounded-lg font-ui font-600 text-xs
+                 bg-card2 border border-border/50 text-slate-400
+                 hover:text-slate-200 transition-all duration-200">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SAVED CLAUSES LIST ═══════════════ -->
+  <section class="glass-card rounded-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3 flex-wrap">
+      <span class="text-lg">📋</span>
+      <h2 class="font-ui text-lg font-700 text-white">Saved Clauses</h2>
+      <label class="flex items-center gap-2 ml-2 cursor-pointer">
+        <input type="checkbox" id="csSelectAllCheckbox" onchange="csToggleSelectAll(this.checked)" class="accent-accent2">
+        <span class="font-mono text-xs text-slate-500">Select All</span>
+      </label>
+      <div class="ml-auto">
+        <button id="csRunSelectedBtn" onclick="csRunSelected()"
+          class="px-4 py-2 rounded-lg font-ui font-600 text-xs
+                 bg-gradient-to-r from-accent2 to-accent text-base
+                 hover:shadow-lg hover:shadow-accent2/20 transition-all duration-200
+                 flex items-center gap-2 whitespace-nowrap">
+          <span id="csRunSelectedText">Run Selected</span>
+          <span id="csRunSelectedSpinner" class="spinner-sm hidden"></span>
+        </button>
+      </div>
+    </div>
+    <div id="csClauseListBody" class="divide-y divide-border/30"></div>
+    <div id="csClauseListEmpty" class="hidden px-6 py-10 text-center">
+      <p class="font-ui text-slate-500 text-sm">No saved clauses yet. Click <span class="text-accent2">+ New Clause</span> to add one.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SCAN RESULTS ═══════════════ -->
+  <section id="csResultsSection" class="hidden">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3">
+        <span class="text-lg">🎯</span>
+        <h2 class="font-ui text-lg font-700 text-white">Scan Results</h2>
+      </div>
+      <div id="csResultsGrid" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </div>
+  </section>
+
+  <section id="csResultsEmpty" class="glass-card rounded-2xl p-10 text-center">
+    <p class="font-ui text-slate-500 text-sm">Select one or more clauses above and click <span class="text-accent2">Run Selected</span> to scan.</p>
+  </section>
+
+</div><!-- /clauseScanPanel -->
 
 <!-- ═══════════════ BACKTEST PANEL ═══════════════ -->
 <div id="backtestPanel" class="hidden space-y-8">
@@ -1787,19 +1905,23 @@ document.getElementById('chartModal').addEventListener('click', e => { if (e.tar
 // ═══════════════════════════════════════════════════════════
 
 function switchTab(tab) {
-  const screenerPanel = document.getElementById('screenerPanel');
-  const backtestPanel = document.getElementById('backtestPanel');
-  const chartinkPanel = document.getElementById('chartinkPanel');
-  const tabScreener   = document.getElementById('tabScreener');
-  const tabBacktest   = document.getElementById('tabBacktest');
-  const tabChartink   = document.getElementById('tabChartink');
+  const screenerPanel  = document.getElementById('screenerPanel');
+  const backtestPanel  = document.getElementById('backtestPanel');
+  const chartinkPanel  = document.getElementById('chartinkPanel');
+  const clauseScanPanel = document.getElementById('clauseScanPanel');
+  const tabScreener    = document.getElementById('tabScreener');
+  const tabBacktest    = document.getElementById('tabBacktest');
+  const tabChartink    = document.getElementById('tabChartink');
+  const tabClauseScan  = document.getElementById('tabClauseScan');
 
   screenerPanel.classList.add('hidden');
   backtestPanel.classList.add('hidden');
   chartinkPanel.classList.add('hidden');
+  clauseScanPanel.classList.add('hidden');
   tabScreener.classList.remove('active');
   tabBacktest.classList.remove('active');
   tabChartink.classList.remove('active');
+  tabClauseScan.classList.remove('active');
 
   if (tab === 'screener') {
     screenerPanel.classList.remove('hidden');
@@ -1811,6 +1933,11 @@ function switchTab(tab) {
     chartinkPanel.classList.remove('hidden');
     tabChartink.classList.add('active');
     fetchChartinkResults();   // immediate refresh on tab open; background polling already running
+    if (!_ckClauseOptionsLoaded) { _ckClauseOptionsLoaded = true; ckLoadClauseOptions(); }
+  } else if (tab === 'clausescan') {
+    clauseScanPanel.classList.remove('hidden');
+    tabClauseScan.classList.add('active');
+    if (!_csLoaded) { _csLoaded = true; csLoadClauses(); }
   }
 }
 
@@ -2708,11 +2835,16 @@ async function runChartinkScanNow() {
   const txt     = document.getElementById('chartinkScanNowText');
   const spinner = document.getElementById('chartinkScanNowSpinner');
 
+  const selected   = Array.from(document.querySelectorAll('.ck-clause-checkbox:checked')).map(cb => cb.value);
+  const namesParam = selected.length ? `?names=${encodeURIComponent(selected.join(','))}` : '';
+
   btn.disabled = true; txt.textContent = 'Scanning...'; spinner.classList.remove('hidden');
-  setChartinkStatus('Pulling from Chartink & running screener...');
+  setChartinkStatus(selected.length
+    ? `Pulling from Chartink (${selected.join(', ')}) & running screener...`
+    : 'Pulling from Chartink & running screener...');
 
   try {
-    const resp = await fetch('/api/chartink-screener/scan-now', { method: 'POST' });
+    const resp = await fetch(`/api/chartink-screener/scan-now${namesParam}`, { method: 'POST' });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ detail: resp.statusText }));
       throw new Error(err.detail || `HTTP ${resp.status}`);
@@ -2724,6 +2856,75 @@ async function runChartinkScanNow() {
     setChartinkStatus('Error: ' + err.message, 'danger');
   } finally {
     btn.disabled = false; txt.textContent = 'Scan Now'; spinner.classList.add('hidden');
+  }
+}
+
+// ─── Active clause selector (drives Scan Now + the background scheduler) ──
+let _ckAvailableClauses     = {};   // name -> scan_clause text (from chartink_router registry)
+let _ckActiveClauseNames    = [];   // currently active/persisted selection
+let _ckClauseOptionsLoaded  = false;
+
+async function ckLoadClauseOptions() {
+  try {
+    const [clausesResp, activeResp] = await Promise.all([
+      fetch('/api/chartink/clauses'),
+      fetch('/api/chartink-screener/active-clauses'),
+    ]);
+    _ckAvailableClauses  = clausesResp.ok ? await clausesResp.json() : {};
+    const activeData     = activeResp.ok ? await activeResp.json() : { names: [] };
+    _ckActiveClauseNames = activeData.names || [];
+    ckRenderClauseCheckboxes();
+  } catch (err) {
+    setChartinkStatus('Error loading clause list: ' + err.message, 'danger');
+  }
+}
+
+function ckRenderClauseCheckboxes() {
+  const box   = document.getElementById('chartinkClauseCheckboxes');
+  const empty = document.getElementById('chartinkClauseSelectorEmpty');
+  const names = Object.keys(_ckAvailableClauses);
+
+  if (!names.length) {
+    box.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  box.innerHTML = names.map(name => {
+    const safeName = _csEscapeHtml(name);
+    const checked  = _ckActiveClauseNames.includes(name) ? 'checked' : '';
+    return `
+      <label class="flex items-center gap-1.5 cursor-pointer bg-card2 border border-border/40 rounded-lg px-2.5 py-1 hover:border-accent2/40 transition-colors">
+        <input type="checkbox" class="ck-clause-checkbox accent-accent2" value="${safeName}" ${checked} onchange="ckOnClauseSelectionChange()">
+        <span class="font-mono text-xs text-slate-300">${safeName}</span>
+      </label>`;
+  }).join('');
+}
+
+async function ckOnClauseSelectionChange() {
+  const names = Array.from(document.querySelectorAll('.ck-clause-checkbox:checked')).map(cb => cb.value);
+
+  if (!names.length) {
+    setChartinkStatus('At least one clause must stay selected — change not saved.', 'danger');
+    ckRenderClauseCheckboxes();  // revert UI to last known-good selection
+    return;
+  }
+
+  _ckActiveClauseNames = names;
+  try {
+    const resp = await fetch('/api/chartink-screener/active-clauses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ names }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    setChartinkStatus(`Active clause(s) updated: ${names.join(', ')} — applies to Scan Now and the next auto-scan`, 'success');
+  } catch (err) {
+    setChartinkStatus('Error saving clause selection: ' + err.message, 'danger');
   }
 }
 
@@ -2754,6 +2955,241 @@ function toggleChartinkFailed() {
   const ch = document.getElementById('chartinkFailedChevron');
   c.classList.toggle('hidden');
   ch.style.transform = c.classList.contains('hidden') ? '' : 'rotate(180deg)';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MULTI-CLAUSE SCANNER (Clause Scan tab)
+// ═══════════════════════════════════════════════════════════
+let _csClauses     = {};   // name -> scan_clause
+let _csEditingName = null;
+let _csLoaded      = false;
+
+function _csEscapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function csSetStatus(msg, type = 'info') {
+  const el = document.getElementById('csStatusText');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'font-mono text-xs ' + ({ info: 'text-slate-500', danger: 'text-danger', success: 'text-accent' }[type] || 'text-slate-500');
+}
+
+async function csLoadClauses() {
+  try {
+    const resp = await fetch('/api/chartink/clauses');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    _csClauses = await resp.json();
+    csRenderClauseList();
+    csSetStatus(`${Object.keys(_csClauses).length} clause(s) loaded`, 'success');
+  } catch (err) {
+    csSetStatus('Error loading clauses: ' + err.message, 'danger');
+  }
+}
+
+function csRenderClauseList() {
+  const body  = document.getElementById('csClauseListBody');
+  const empty = document.getElementById('csClauseListEmpty');
+  const names = Object.keys(_csClauses);
+
+  document.getElementById('csClauseCount').textContent = `${names.length} saved`;
+
+  if (!names.length) {
+    body.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  body.innerHTML = names.map(name => {
+    const safeName   = _csEscapeHtml(name);
+    const safeClause = _csEscapeHtml(_csClauses[name]);
+    return `
+      <div class="px-6 py-3 flex items-center gap-3 hover:bg-card2/40 transition-colors">
+        <input type="checkbox" class="cs-clause-checkbox accent-accent2 shrink-0" value="${safeName}">
+        <span class="font-mono text-sm text-slate-200 font-600 shrink-0">${safeName}</span>
+        <span class="font-mono text-xs text-slate-600 truncate flex-1" title="${safeClause}">${safeClause}</span>
+        <button onclick="csOpenEditForm('${safeName}')" class="font-mono text-xs text-accent2 hover:underline shrink-0">Edit</button>
+        <button onclick="csDeleteClause('${safeName}')" class="font-mono text-xs text-danger hover:underline shrink-0">Delete</button>
+      </div>`;
+  }).join('');
+}
+
+function csToggleSelectAll(checked) {
+  document.querySelectorAll('.cs-clause-checkbox').forEach(cb => { cb.checked = checked; });
+}
+
+function csGetSelectedNames() {
+  return Array.from(document.querySelectorAll('.cs-clause-checkbox:checked')).map(cb => cb.value);
+}
+
+function csOpenAddForm() {
+  _csEditingName = null;
+  document.getElementById('csFormTitle').textContent = 'Add New Clause';
+  document.getElementById('csClauseNameInput').value = '';
+  document.getElementById('csClauseNameInput').disabled = false;
+  document.getElementById('csClauseTextInput').value = '';
+  document.getElementById('csFormError').classList.add('hidden');
+  document.getElementById('csFormSection').classList.remove('hidden');
+  document.getElementById('csClauseNameInput').focus();
+}
+
+function csOpenEditForm(name) {
+  if (!(name in _csClauses)) return;
+  _csEditingName = name;
+  document.getElementById('csFormTitle').textContent = `Edit Clause: ${name}`;
+  document.getElementById('csClauseNameInput').value = name;
+  document.getElementById('csClauseNameInput').disabled = true; // renaming = delete + re-add, keep simple
+  document.getElementById('csClauseTextInput').value = _csClauses[name];
+  document.getElementById('csFormError').classList.add('hidden');
+  document.getElementById('csFormSection').classList.remove('hidden');
+  document.getElementById('csClauseTextInput').focus();
+}
+
+function csCancelForm() {
+  _csEditingName = null;
+  document.getElementById('csFormSection').classList.add('hidden');
+  document.getElementById('csClauseNameInput').disabled = false;
+}
+
+async function csSaveClause() {
+  const nameInput    = document.getElementById('csClauseNameInput');
+  const clauseInput  = document.getElementById('csClauseTextInput');
+  const errEl        = document.getElementById('csFormError');
+
+  const name   = nameInput.value.trim();
+  const clause = clauseInput.value.trim();
+
+  if (!name || !clause) {
+    errEl.textContent = 'Both name and scan clause are required.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const btn = document.getElementById('csSaveClauseBtn');
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/api/chartink/clauses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, scan_clause: clause }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    _csClauses = data.clauses || _csClauses;
+    csRenderClauseList();
+    csCancelForm();
+    csSetStatus(`Clause "${name}" saved`, 'success');
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function csDeleteClause(name) {
+  if (!confirm(`Delete saved clause "${name}"? This cannot be undone.`)) return;
+  try {
+    const resp = await fetch(`/api/chartink/clauses/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    _csClauses = data.clauses || {};
+    csRenderClauseList();
+    csSetStatus(`Clause "${name}" deleted`, 'success');
+  } catch (err) {
+    csSetStatus('Error deleting: ' + err.message, 'danger');
+  }
+}
+
+async function csRunSelected() {
+  const names = csGetSelectedNames();
+  if (!names.length) {
+    csSetStatus('Select at least one clause first.', 'danger');
+    return;
+  }
+
+  const btn     = document.getElementById('csRunSelectedBtn');
+  const txt     = document.getElementById('csRunSelectedText');
+  const spinner = document.getElementById('csRunSelectedSpinner');
+
+  btn.disabled = true; txt.textContent = 'Scanning...'; spinner.classList.remove('hidden');
+  csSetStatus(`Scanning ${names.length} clause(s)...`);
+
+  try {
+    const url  = `/api/chartink/scan/multi?names=${encodeURIComponent(names.join(','))}`;
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    csRenderResults(data);
+    csSetStatus(`Scan complete • ${names.length} clause(s)`, 'success');
+  } catch (err) {
+    csSetStatus('Error: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = false; txt.textContent = 'Run Selected'; spinner.classList.add('hidden');
+  }
+}
+
+function csRenderResults(data) {
+  const section = document.getElementById('csResultsSection');
+  const empty   = document.getElementById('csResultsEmpty');
+  const grid    = document.getElementById('csResultsGrid');
+  const names   = Object.keys(data);
+
+  if (!names.length) {
+    section.classList.add('hidden');
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  section.classList.remove('hidden');
+
+  grid.innerHTML = names.map(name => {
+    const r        = data[name];
+    const safeName = _csEscapeHtml(name);
+
+    if (r.error) {
+      return `
+        <div class="scan-card nodata bg-card2/40 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-mono text-sm font-600 text-slate-300">${safeName}</span>
+            <span class="font-mono text-xs px-2 py-0.5 rounded-full bg-danger/10 text-danger">error</span>
+          </div>
+          <p class="font-mono text-xs text-danger">${_csEscapeHtml(r.error)}</p>
+        </div>`;
+    }
+
+    const results = r.results || [];
+    const chips = results.length
+      ? results.map(row => `<span class="font-mono text-xs px-2 py-1 rounded bg-card2 text-slate-300">${_csEscapeHtml(row.symbol || '')}</span>`).join('')
+      : `<span class="font-mono text-xs text-slate-600">no matches</span>`;
+
+    return `
+      <div class="scan-card prime bg-card2/40 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+          <span class="font-mono text-sm font-600 text-slate-200">${safeName}</span>
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent">${r.count} hit${r.count === 1 ? '' : 's'}</span>
+            <span class="font-mono text-xs px-2 py-0.5 rounded-full ${r.cached ? 'bg-slate-700/40 text-slate-400' : 'bg-accent2/10 text-accent2'}">${r.cached ? 'cached' : 'fresh'}</span>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-1.5">${chips}</div>
+      </div>`;
+  }).join('');
 }
 
 // Chartink auto-poll starts on page load. Placed at end of script after

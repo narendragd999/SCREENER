@@ -22,7 +22,9 @@ Mount in main.py:
 Routes exposed (prefix /api/chartink-screener):
     GET    /api/chartink-screener/results          -> latest saved screener output + metadata
     GET    /api/chartink-screener/today-primes     -> accumulated today's prime targets
-    POST   /api/chartink-screener/scan-now         -> force an immediate scan (returns result)
+    GET    /api/chartink-screener/active-clauses   -> currently selected clause name(s) + all available saved clauses
+    POST   /api/chartink-screener/active-clauses   -> persist which saved clause name(s) drive scans
+    POST   /api/chartink-screener/scan-now         -> force an immediate scan (?names=a,b or ?clause=<raw>)
     POST   /api/chartink-screener/replay-today     -> re-screen ALL tickers seen in today's log
     DELETE /api/chartink-screener/clear            -> wipe saved results + log file
     GET    /api/chartink-screener/log              -> raw history of which tickers were pulled & when
@@ -39,8 +41,9 @@ import httpx
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
-from chartink_router import run_scan, DEFAULT_SCAN_CLAUSE
+from chartink_router import run_scan, DEFAULT_SCAN_CLAUSE, _load_clauses as _load_saved_clauses
 from ema9_router import _run_screen_pipeline
 from telegram_alert import send_telegram_message, format_prime_targets_message
 
@@ -60,8 +63,14 @@ DATA_DIR            = "data"
 RESULTS_FILE        = os.path.join(DATA_DIR, "chartink_signals.json")
 LOG_FILE            = os.path.join(DATA_DIR, "chartink_log.json")
 TODAY_PRIMES_FILE   = os.path.join(DATA_DIR, "chartink_today_primes.json")
+ACTIVE_CLAUSES_FILE = os.path.join(DATA_DIR, "chartink_active_clauses.json")
 SCAN_INTERVAL_MIN   = 5
 MAX_LOG_ENTRIES     = 500
+
+# Clause name(s) used when nothing has been explicitly selected yet.
+# Matches the "ema9_daily_signal" entry chartink_router.py seeds by default,
+# so a fresh install behaves exactly like the old hardcoded-clause version.
+DEFAULT_ACTIVE_CLAUSE_NAMES = ["ema9_daily_signal"]
 
 GSHEET_WEBHOOK_URL  = "https://script.google.com/macros/s/AKfycbz3Vj2-_xFkRhqXoySwxDyNZralsZ-XuZamHyuffo7INjtuNPNUSt4lxJg0aqOz7EAe/exec"
 
@@ -106,7 +115,7 @@ def _write_json(path: str, data: Any) -> None:
 def load_results() -> Dict:
     return _read_json(RESULTS_FILE, {
         "last_run_at":    None,
-        "scan_clause":    DEFAULT_SCAN_CLAUSE,
+        "clause_names":   DEFAULT_ACTIVE_CLAUSE_NAMES,
         "symbols_pulled": [],
         "result":         None,
     })
@@ -126,6 +135,40 @@ def append_log(entry: Dict) -> None:
     if len(log) > MAX_LOG_ENTRIES:
         log = log[-MAX_LOG_ENTRIES:]
     _write_json(LOG_FILE, log)
+
+
+# ─────────────────────────────────────────────────────────────
+#  ACTIVE CLAUSE SELECTION
+#  Which saved clause name(s) (from chartink_router's registry) currently
+#  drive both manual "Scan Now" presses and the background scheduler.
+#  Persisted to disk so a server restart keeps the user's last choice.
+# ─────────────────────────────────────────────────────────────
+def _load_active_clause_names() -> List[str]:
+    data = _read_json(ACTIVE_CLAUSES_FILE, {"names": DEFAULT_ACTIVE_CLAUSE_NAMES})
+    names = data.get("names") or DEFAULT_ACTIVE_CLAUSE_NAMES
+    return names
+
+
+def _save_active_clause_names(names: List[str]) -> None:
+    _write_json(ACTIVE_CLAUSES_FILE, {"names": names})
+
+
+def _resolve_clause_names(names: List[str]) -> Dict[str, str]:
+    """
+    Map requested clause names to their raw Chartink scan-clause text using
+    chartink_router's persistent registry. Unknown names are skipped (logged).
+    If nothing resolves (e.g. registry was cleared), fall back to the
+    hardcoded DEFAULT_SCAN_CLAUSE so the watcher never goes silent.
+    """
+    saved = _load_saved_clauses()
+    resolved = {n: saved[n] for n in names if n in saved}
+    unknown = [n for n in names if n not in saved]
+    if unknown:
+        logger.warning(f"[Chartink] Unknown clause name(s) skipped: {unknown}")
+    if not resolved:
+        logger.warning("[Chartink] No valid clause names resolved — falling back to DEFAULT_SCAN_CLAUSE.")
+        resolved = {"_default": DEFAULT_SCAN_CLAUSE}
+    return resolved
 
 
 # ─────────────────────────────────────────────────────────────
@@ -261,13 +304,19 @@ async def _log_primes_to_gsheet(today_primes: Dict[str, Dict], prime_set: Set[st
 # ─────────────────────────────────────────────────────────────
 #  CORE SCAN+SCREEN ROUTINE
 # ─────────────────────────────────────────────────────────────
-async def run_chartink_screen(scan_clause: str = DEFAULT_SCAN_CLAUSE, force_fresh: bool = True) -> Dict:
+async def run_chartink_screen(clauses: Optional[Dict[str, str]] = None, force_fresh: bool = True) -> Dict:
     """
-    1. Hit Chartink to get the current symbol list for scan_clause.
-    2. Run those symbols through the full EMA9 + trend + FV pipeline.
+    1. Hit Chartink once per clause to get each clause's current symbol list,
+       then union + dedupe across all of them into a single ticker set.
+    2. Run that combined symbol set through the full EMA9 + trend + FV pipeline.
     3. Merge any new prime targets into today's accumulator.
     4. Push the full accumulated prime list to GSheet (with header row).
     5. Persist the latest scan result to disk.
+
+    `clauses`: optional {name: scan_clause_text} mapping to run this time.
+    If omitted, resolves from the persisted active clause-name selection
+    (chartink_active_clauses.json) — this is what the background scheduler
+    uses on every 5-min tick.
     """
     if not _scan_lock.acquire(blocking=False):
         raise HTTPException(409, "A Chartink scan is already running — try again shortly.")
@@ -275,20 +324,35 @@ async def run_chartink_screen(scan_clause: str = DEFAULT_SCAN_CLAUSE, force_fres
     try:
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        chartink_data = run_scan(scan_clause, use_cache=not force_fresh)
-        symbols = [r["symbol"] for r in chartink_data["results"] if r.get("symbol")]
+        resolved = clauses if clauses else _resolve_clause_names(_load_active_clause_names())
+
+        symbol_set: Set[str] = set()
+        per_clause_counts: Dict[str, int] = {}
+        for name, clause_text in resolved.items():
+            try:
+                chartink_data = run_scan(clause_text, use_cache=not force_fresh)
+                syms = [r["symbol"] for r in chartink_data["results"] if r.get("symbol")]
+            except HTTPException as exc:
+                logger.error(f"[Chartink] Clause '{name}' failed: {exc.detail}")
+                syms = []
+            per_clause_counts[name] = len(syms)
+            symbol_set.update(syms)
+
+        symbols = sorted(symbol_set)
+        clause_names = list(resolved.keys())
 
         append_log({
-            "time":        ts,
-            "scan_clause": scan_clause,
-            "symbols":     symbols,
-            "count":       len(symbols),
+            "time":         ts,
+            "clause_names": clause_names,
+            "per_clause":   per_clause_counts,
+            "symbols":      symbols,
+            "count":        len(symbols),
         })
 
         if not symbols:
             payload = {
                 "last_run_at":    ts,
-                "scan_clause":    scan_clause,
+                "clause_names":   clause_names,
                 "symbols_pulled": [],
                 "result": {
                     "signals": [], "prime_targets": [], "other_signals": [],
@@ -297,10 +361,13 @@ async def run_chartink_screen(scan_clause: str = DEFAULT_SCAN_CLAUSE, force_fres
                 },
             }
             save_results(payload)
-            logger.info("[Chartink] No symbols returned by scan; nothing to screen.")
+            logger.info("[Chartink] No symbols returned by any clause; nothing to screen.")
             return payload
 
-        logger.info(f"[Chartink] Pulled {len(symbols)} symbols: {symbols}")
+        logger.info(
+            f"[Chartink] Pulled {len(symbols)} unique symbols from "
+            f"{len(resolved)} clause(s) {per_clause_counts}: {symbols}"
+        )
 
         result = await _run_screen_pipeline(
             tickers=symbols,
@@ -312,7 +379,7 @@ async def run_chartink_screen(scan_clause: str = DEFAULT_SCAN_CLAUSE, force_fres
 
         payload = {
             "last_run_at":    ts,
-            "scan_clause":    scan_clause,
+            "clause_names":   clause_names,
             "symbols_pulled": symbols,
             "result":         result,
         }
@@ -455,10 +522,67 @@ async def get_today_primes():
     }
 
 
+@router.get("/active-clauses")
+async def get_active_clauses():
+    """
+    Currently selected clause name(s) driving 'Scan Now' and the background
+    scheduler, plus the full set of available saved clauses (from chartink_router's
+    registry) so the frontend can render a checkbox list without a second round-trip.
+    """
+    return {
+        "names":     _load_active_clause_names(),
+        "available": _load_saved_clauses(),
+    }
+
+
+class ActiveClausesUpdate(BaseModel):
+    names: List[str]
+
+
+@router.post("/active-clauses")
+async def set_active_clauses(req: ActiveClausesUpdate):
+    """
+    Persist which saved clause name(s) should drive 'Scan Now' and the
+    background scheduler going forward. Validates names against the
+    chartink_router clause registry.
+    """
+    if not req.names:
+        raise HTTPException(400, "names must not be empty")
+    saved = _load_saved_clauses()
+    unknown = [n for n in req.names if n not in saved]
+    if unknown:
+        raise HTTPException(404, f"Unknown clause name(s): {unknown}")
+    _save_active_clause_names(req.names)
+    return {"ok": True, "names": req.names}
+
+
 @router.post("/scan-now")
-async def scan_now(clause: Optional[str] = None):
-    """Force an immediate Chartink pull + full screen, bypassing the 5-min schedule."""
-    return await run_chartink_screen(clause or DEFAULT_SCAN_CLAUSE, force_fresh=True)
+async def scan_now(names: Optional[str] = None, clause: Optional[str] = None):
+    """
+    Force an immediate Chartink pull + full screen, bypassing the 5-min schedule.
+
+    - ?names=ema9_5min_breakout,ema9_daily_signal
+        Run these saved clause names (union of their symbol lists), AND persist
+        this as the new active selection so the background scheduler picks it
+        up on its next tick too.
+    - ?clause=<raw scan_clause text>
+        One-off ad-hoc raw clause, NOT added to the registry and NOT persisted
+        as the active selection — useful for a quick test run.
+    - (neither)
+        Re-run whatever is currently the persisted active selection.
+    """
+    if clause:
+        return await run_chartink_screen({"_adhoc": clause}, force_fresh=True)
+
+    if names:
+        clause_names = [n.strip() for n in names.split(",") if n.strip()]
+        if not clause_names:
+            raise HTTPException(400, "names must contain at least one clause name")
+        resolved = _resolve_clause_names(clause_names)
+        _save_active_clause_names(clause_names)
+        return await run_chartink_screen(resolved, force_fresh=True)
+
+    return await run_chartink_screen(None, force_fresh=True)
 
 
 @router.post("/replay-today")
@@ -475,7 +599,7 @@ async def clear_chartink_results():
     """Clear saved results, today's prime accumulator, and the pull log."""
     save_results({
         "last_run_at":    None,
-        "scan_clause":    DEFAULT_SCAN_CLAUSE,
+        "clause_names":   _load_active_clause_names(),
         "symbols_pulled": [],
         "result":         None,
     })

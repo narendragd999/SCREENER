@@ -9,15 +9,25 @@ Mount in main.py:
     app.include_router(chartink_router)
 
 Routes exposed:
-    GET  /api/chartink/scan            -> run the default (or ?clause=) scan, cached
-    POST /api/chartink/scan            -> run a scan with a custom scan_clause in body
-    GET  /api/chartink/symbols         -> just the list of NSE symbols from default scan
-    DELETE /api/chartink/cache         -> clear cached results
+    GET    /api/chartink/scan              -> run the default (or ?clause=) scan, cached
+    POST   /api/chartink/scan              -> run a scan with a custom scan_clause in body
+    GET    /api/chartink/symbols           -> just the list of NSE symbols from default scan
+    DELETE /api/chartink/cache             -> clear cached results
+
+    GET    /api/chartink/clauses           -> list all saved named scan clauses
+    POST   /api/chartink/clauses           -> add/overwrite a named clause
+    DELETE /api/chartink/clauses/{name}    -> remove a named clause
+
+    GET    /api/chartink/scan/by-name/{n}  -> run a single saved clause by name
+    GET    /api/chartink/scan/multi        -> run several saved clauses (?names=a,b,c, or all if omitted)
+    POST   /api/chartink/scan/multi        -> run an arbitrary ad-hoc set of clauses (not persisted)
 """
 
+import json
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import unquote
 
@@ -32,9 +42,9 @@ router = APIRouter(prefix="/api/chartink", tags=["chartink"])
 # ─────────────────────────────────────────────────────────────
 CHARTINK_BASE     = "https://chartink.com"
 CHARTINK_PROCESS  = f"{CHARTINK_BASE}/screener/process"
+
 DEFAULT_SCAN_CLAUSE = (
-    "( {33489} ( [0] 5 minute close > [0] 5 minute ema( close,9 ) "
-    "and [ -1 ] 5 minute close <= [ -1 ] 5 minute ema( close,9 ) ) )"
+    "( {33489} (  daily ^2349('output'='signal')^ >  daily ema(  daily close , 9 ) and  1 day ago  ^2349('output'='signal')^ <=  1 day ago  ema(  daily close , 9 ) ) )"
 )
 
 UA = (
@@ -157,6 +167,129 @@ def run_scan(scan_clause: str = DEFAULT_SCAN_CLAUSE, use_cache: bool = True) -> 
         _cache[cache_key] = {"ts": time.time(), "data": results}
 
     return {"results": results, "count": len(results), "cached": False}
+
+
+# ─────────────────────────────────────────────────────────────
+#  CLAUSE REGISTRY (persistent, file-backed)
+# ─────────────────────────────────────────────────────────────
+CLAUSES_FILE = Path(__file__).parent / "chartink_clauses.json"
+_clauses_lock = threading.Lock()
+
+DEFAULT_CLAUSES = {
+    "ema9_5min_breakout": (
+        "( {33489} ( [0] 5 minute close > [0] 5 minute ema( close,9 ) "
+        "and [ -1 ] 5 minute close <= [ -1 ] 5 minute ema( close,9 ) ) )"
+    ),
+    "ema9_daily_signal": DEFAULT_SCAN_CLAUSE,
+}
+
+
+def _load_clauses() -> Dict[str, str]:
+    with _clauses_lock:
+        if not CLAUSES_FILE.exists():
+            CLAUSES_FILE.write_text(json.dumps(DEFAULT_CLAUSES, indent=2))
+            return dict(DEFAULT_CLAUSES)
+        try:
+            return json.loads(CLAUSES_FILE.read_text())
+        except (json.JSONDecodeError, OSError):
+            return dict(DEFAULT_CLAUSES)
+
+
+def _save_clauses(clauses: Dict[str, str]) -> None:
+    with _clauses_lock:
+        CLAUSES_FILE.write_text(json.dumps(clauses, indent=2))
+
+
+class ClauseUpsert(BaseModel):
+    name: str
+    scan_clause: str
+
+
+@router.get("/clauses")
+async def list_clauses():
+    """List all saved named scan clauses."""
+    return _load_clauses()
+
+
+@router.post("/clauses")
+async def upsert_clause(req: ClauseUpsert):
+    """Add a new named clause, or overwrite an existing name."""
+    if not req.name.strip() or not req.scan_clause.strip():
+        raise HTTPException(400, "name and scan_clause must not be empty")
+    clauses = _load_clauses()
+    clauses[req.name] = req.scan_clause
+    _save_clauses(clauses)
+    return {"ok": True, "clauses": clauses}
+
+
+@router.delete("/clauses/{name}")
+async def delete_clause(name: str):
+    clauses = _load_clauses()
+    if name not in clauses:
+        raise HTTPException(404, f"No clause named '{name}'")
+    del clauses[name]
+    _save_clauses(clauses)
+    return {"ok": True, "clauses": clauses}
+
+
+# ─────────────────────────────────────────────────────────────
+#  MULTI-SCAN
+# ─────────────────────────────────────────────────────────────
+def run_multi_scan(clauses: Dict[str, str], use_cache: bool = True) -> Dict[str, Any]:
+    """
+    Run several scan clauses sequentially with a small delay.
+    Sequential (not threaded) because all clauses share one requests.Session +
+    XSRF token — concurrent POSTs risk a stale-token race if one triggers a
+    401/403/419 mid-flight and force-refreshes the session under another thread.
+    """
+    out: Dict[str, Any] = {}
+    for i, (name, clause) in enumerate(clauses.items()):
+        if i > 0:
+            time.sleep(0.5)
+        try:
+            out[name] = run_scan(clause, use_cache=use_cache)
+        except HTTPException as e:
+            out[name] = {"error": str(e.detail), "status": e.status_code}
+    return out
+
+
+@router.get("/scan/by-name/{name}")
+async def scan_by_name(name: str, use_cache: bool = True):
+    """Run a single saved clause by its name."""
+    clauses = _load_clauses()
+    if name not in clauses:
+        raise HTTPException(404, f"No clause named '{name}'. Known: {list(clauses.keys())}")
+    return run_scan(clauses[name], use_cache=use_cache)
+
+
+@router.get("/scan/multi")
+async def get_multi_scan(names: Optional[str] = None, use_cache: bool = True):
+    """
+    Run multiple saved clauses at once.
+    ?names=ema9_5min_breakout,ema9_daily_signal  -> only those
+    (no ?names)                                  -> ALL saved clauses
+    """
+    clauses = _load_clauses()
+    if names:
+        wanted = [n.strip() for n in names.split(",") if n.strip()]
+        missing = [n for n in wanted if n not in clauses]
+        if missing:
+            raise HTTPException(404, f"Unknown clause name(s): {missing}")
+        clauses = {n: clauses[n] for n in wanted}
+    return run_multi_scan(clauses, use_cache=use_cache)
+
+
+class BatchScanRequest(BaseModel):
+    clauses: Dict[str, str]   # ad-hoc name -> scan_clause, not persisted
+    use_cache: bool = True
+
+
+@router.post("/scan/multi")
+async def post_multi_scan(req: BatchScanRequest):
+    """Run an arbitrary, ad-hoc set of clauses without saving them to the registry."""
+    if not req.clauses:
+        raise HTTPException(400, "clauses must not be empty")
+    return run_multi_scan(req.clauses, use_cache=req.use_cache)
 
 
 # ─────────────────────────────────────────────────────────────
