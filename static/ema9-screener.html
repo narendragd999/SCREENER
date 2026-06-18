@@ -400,12 +400,53 @@ tailwind.config = {
 
   <!-- ═══════════════ CSV UPLOAD ═══════════════ -->
   <section class="glass-card rounded-2xl p-6">
-    <div class="flex items-center gap-2 mb-4">
+    <div class="flex items-center gap-2 mb-4 flex-wrap">
       <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
       </svg>
       <h2 class="font-ui text-lg font-700 text-white">Upload CSV</h2>
       <span class="text-xs font-mono text-slate-500 ml-2">Third-party screener exports supported</span>
+      <a href="/sample_tickers.csv" download
+         class="ml-auto flex items-center gap-1.5 text-xs font-mono text-accent2 hover:text-accent transition-colors
+                border border-accent2/30 hover:border-accent/50 rounded-lg px-2.5 py-1 bg-accent2/5 hover:bg-accent/10"
+         title="Download a sample CSV in the correct format">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+        </svg>
+        Download Sample CSV
+      </a>
+    </div>
+
+    <!-- ═══════ Manual Ticker Input ═══════ -->
+    <div class="bg-card2/40 rounded-xl p-5 mb-5 border border-border/40">
+      <div class="flex items-center gap-2 mb-3 flex-wrap">
+        <svg class="w-4 h-4 text-accent2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        <h3 class="font-ui text-sm font-600 text-white">Manual Ticker Entry</h3>
+        <span class="text-xs font-mono text-slate-500">Paste tickers — comma, space, or newline separated</span>
+      </div>
+      <textarea id="manualTickersInput" rows="3"
+        placeholder="e.g.  RELIANCE, TCS, INFY, HDFCBANK, GODFRYPHLP, JSWENERGY&#10;  — or paste a column of tickers from any screener —"
+        class="w-full bg-card border border-border/50 rounded-lg px-3 py-2.5 font-mono text-sm text-slate-200
+               placeholder:text-slate-600 placeholder:font-ui placeholder:text-xs
+               focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20
+               resize-y min-h-[80px]"></textarea>
+      <div class="flex items-center gap-3 mt-3 flex-wrap">
+        <button id="manualScreenBtn"
+          class="px-5 py-2 rounded-lg font-ui font-600 text-sm
+                 bg-gradient-to-r from-accent2 to-accent text-base
+                 hover:shadow-lg hover:shadow-accent2/20 transition-all duration-200
+                 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span id="manualScreenBtnText">Screen Tickers</span>
+          <span id="manualScreenBtnSpinner" class="spinner-sm hidden"></span>
+        </button>
+        <span id="manualStatusText" class="font-mono text-xs text-slate-500"></span>
+        <button id="clearManualBtn" class="ml-auto text-xs text-slate-500 hover:text-danger transition-colors">Clear</button>
+      </div>
     </div>
 
     <div id="dropZone" class="upload-zone rounded-xl p-8 text-center">
@@ -1688,6 +1729,128 @@ async function runCsvScreen() {
 
 function setCsvStatus(msg, type='info') {
   const el = document.getElementById('csvStatusText');
+  el.textContent = msg;
+  el.className = 'font-mono text-xs ' + ({ info:'text-slate-500', danger:'text-danger', success:'text-accent' }[type] || 'text-slate-500');
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  MANUAL TICKER ENTRY (textarea → /api/ema9/screen)
+// ═══════════════════════════════════════════════════════════
+
+const manualTickersInput = document.getElementById('manualTickersInput');
+const manualScreenBtn    = document.getElementById('manualScreenBtn');
+const clearManualBtn     = document.getElementById('clearManualBtn');
+
+/**
+ * Parse free-form ticker input. Accepts:
+ *   - Comma-separated:    "RELIANCE, TCS, INFY"
+ *   - Space-separated:    "RELIANCE TCS INFY"
+ *   - Newline-separated:  one ticker per line (pasted from Excel/screener)
+ *   - Tab-separated:      pasted from Excel columns
+ *   - Mixed:              "RELIANCE, TCS\nINFY  HDFCBANK"
+ * Also strips:
+ *   - .NS / .BO suffixes  (RELIANCE.NS → RELIANCE)
+ *   - Surrounding quotes  ("RELIANCE" → RELIANCE)
+ *   - Whitespace
+ *   - Empty entries
+ *   - Duplicates (preserves first-seen order)
+ *
+ * @param {string} raw - The raw textarea content
+ * @returns {string[]} - Cleaned, deduped, uppercase ticker list
+ */
+function parseManualTickers(raw) {
+  if (!raw || typeof raw !== 'string') return [];
+  return [
+    ...new Set(
+      raw
+        .split(/[\s,;\t\n\r]+/)            // split on any separator
+        .map(t => t.trim().toUpperCase())
+        .map(t => t.replace(/^["']+|["']+$/g, ''))  // strip quotes
+        .map(t => t.replace(/\.(NS|BO)$/i, ''))      // strip .NS / .BO
+        .filter(t => t.length > 0 && /^[A-Z0-9\-]+$/.test(t))  // sanity: alnum + hyphen
+    )
+  ];
+}
+
+// Live preview: as user types, show count of parsed tickers
+manualTickersInput.addEventListener('input', () => {
+  const tickers = parseManualTickers(manualTickersInput.value);
+  const statusEl = document.getElementById('manualStatusText');
+  if (tickers.length === 0) {
+    statusEl.textContent = '';
+    manualScreenBtn.disabled = true;
+  } else {
+    statusEl.textContent = `${tickers.length} ticker${tickers.length === 1 ? '' : 's'} ready`;
+    statusEl.className = 'font-mono text-xs text-accent2';
+    manualScreenBtn.disabled = false;
+  }
+});
+
+// Enter key (Ctrl+Enter or Cmd+Enter) triggers screen
+manualTickersInput.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    if (!manualScreenBtn.disabled) runManualScreen();
+  }
+});
+
+clearManualBtn.addEventListener('click', () => {
+  manualTickersInput.value = '';
+  document.getElementById('manualStatusText').textContent = '';
+  manualScreenBtn.disabled = true;
+  manualTickersInput.focus();
+});
+
+manualScreenBtn.addEventListener('click', runManualScreen);
+
+async function runManualScreen() {
+  const tickers = parseManualTickers(manualTickersInput.value);
+  if (tickers.length === 0) {
+    setManualStatus('Enter at least one ticker first', 'danger');
+    return;
+  }
+
+  const btn     = manualScreenBtn;
+  const txt     = document.getElementById('manualScreenBtnText');
+  const spinner = document.getElementById('manualScreenBtnSpinner');
+
+  btn.disabled = true;
+  txt.textContent = 'Screening...';
+  spinner.classList.remove('hidden');
+  setManualStatus(`Screening ${tickers.length} ticker${tickers.length === 1 ? '' : 's'}...`);
+
+  try {
+    const resp = await fetch('/api/ema9/screen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tickers:         tickers,
+        interval:        '1d',
+        lookback_days:   180,
+        max_candles_ago: 10,
+        require_uptrend: true,
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    lastResults = data;
+    renderResults(data);
+    setManualStatus(`Done — ${data.count} signals found`, 'success');
+  } catch (err) {
+    setManualStatus('Error: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = false;
+    txt.textContent = 'Screen Tickers';
+    spinner.classList.add('hidden');
+  }
+}
+
+function setManualStatus(msg, type='info') {
+  const el = document.getElementById('manualStatusText');
   el.textContent = msg;
   el.className = 'font-mono text-xs ' + ({ info:'text-slate-500', danger:'text-danger', success:'text-accent' }[type] || 'text-slate-500');
 }

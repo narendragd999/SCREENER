@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 # ─────────────────────────────────────────────────────────────
@@ -1234,6 +1235,36 @@ async def ema9_upload_csv(file: UploadFile = File(...)):
     }
 
     return result
+
+
+# ─────────────────────────────────────────────────────────────
+#  SAMPLE CSV DOWNLOAD
+#  Serves a small reference CSV so users can see the expected
+#  column format (Symbol / Company Name) before uploading their
+#  own screener export.
+# ─────────────────────────────────────────────────────────────
+import pathlib as _pathlib
+
+_SAMPLE_CSV_PATHS = [
+    _pathlib.Path(__file__).parent / "sample_tickers.csv",          # same dir as router
+    _pathlib.Path.cwd() / "sample_tickers.csv",                      # project root
+    _pathlib.Path.cwd() / "download" / "sample_tickers.csv",         # download/ subdir
+    _pathlib.Path("/home/z/my-project/download/sample_tickers.csv"), # absolute fallback
+]
+
+
+@router.get("/sample_tickers.csv")
+async def download_sample_csv():
+    """Download a sample CSV showing the expected ticker-list format."""
+    for p in _SAMPLE_CSV_PATHS:
+        if p.exists() and p.is_file():
+            return FileResponse(
+                path=str(p),
+                media_type="text/csv",
+                filename="sample_tickers.csv",
+                headers={"Content-Disposition": 'attachment; filename="sample_tickers.csv"'},
+            )
+    raise HTTPException(404, "sample_tickers.csv not found on server")
 
 
 @router.get("/api/ema9/quick-scan/{ticker}")

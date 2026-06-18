@@ -752,13 +752,13 @@
       "lr_slope_pct": 0.2817,
       "above_50sma": true,
       "above_200sma": true,
-      "fv_model_count": 3,
-      "valuation_bucket": "FAIR",
       "composite_fair_price": 638.71,
+      "valuation_bucket": "FAIR",
       "fv_error": null,
-      "gap_to_fair_pct": 10.97,
       "composite_gain_pct": 10.98,
-      "fair_gap_pct": 10.98
+      "fair_gap_pct": 10.98,
+      "gap_to_fair_pct": 10.97,
+      "fv_model_count": 3
     },
     "BEL": {
       "ticker": "BEL",
@@ -1511,13 +1511,13 @@
       "lr_slope_pct": -0.092,
       "above_50sma": true,
       "above_200sma": true,
-      "fv_model_count": 3,
-      "valuation_bucket": "FAIR",
       "composite_fair_price": 442.08,
+      "valuation_bucket": "FAIR",
       "fv_error": null,
-      "gap_to_fair_pct": 3.15,
       "composite_gain_pct": 3.15,
-      "fair_gap_pct": 3.15
+      "fair_gap_pct": 3.15,
+      "gap_to_fair_pct": 3.15,
+      "fv_model_count": 3
     },
     "BHARTIARTL": {
       "ticker": "BHARTIARTL",
@@ -6040,13 +6040,13 @@
       "lr_slope_pct": 0.1332,
       "above_50sma": true,
       "above_200sma": true,
-      "fv_model_count": 3,
-      "valuation_bucket": "FAIR",
       "composite_fair_price": 1787.11,
+      "valuation_bucket": "FAIR",
       "fv_error": null,
-      "gap_to_fair_pct": 5.48,
       "composite_gain_pct": 5.49,
-      "fair_gap_pct": 5.49
+      "fair_gap_pct": 5.49,
+      "gap_to_fair_pct": 5.48,
+      "fv_model_count": 3
     },
     "PAGEIND": {
       "ticker": "PAGEIND",
@@ -15093,13 +15093,13 @@
       "lr_slope_pct": 0.2653,
       "above_50sma": true,
       "above_200sma": false,
-      "fv_model_count": 3,
-      "valuation_bucket": "FAIR",
       "composite_fair_price": 14124.36,
+      "valuation_bucket": "FAIR",
       "fv_error": null,
-      "gap_to_fair_pct": 11.51,
       "composite_gain_pct": 11.51,
-      "fair_gap_pct": 11.51
+      "fair_gap_pct": 11.51,
+      "gap_to_fair_pct": 11.51,
+      "fv_model_count": 3
     },
     "GODREJPROP": {
       "ticker": "GODREJPROP",
@@ -24146,13 +24146,13 @@
       "lr_slope_pct": -0.0796,
       "above_50sma": true,
       "above_200sma": true,
-      "fv_model_count": 2,
-      "valuation_bucket": "UNDERVALUED",
       "composite_fair_price": 5040.04,
+      "valuation_bucket": "UNDERVALUED",
       "fv_error": null,
-      "gap_to_fair_pct": 17.03,
       "composite_gain_pct": 17.03,
-      "fair_gap_pct": 17.03
+      "fair_gap_pct": 17.03,
+      "gap_to_fair_pct": 17.03,
+      "fv_model_count": 2
     },
     "VBL": {
       "ticker": "VBL",
@@ -24905,13 +24905,13 @@
       "lr_slope_pct": 0.5147,
       "above_50sma": true,
       "above_200sma": true,
-      "fv_model_count": 3,
-      "valuation_bucket": "FAIR",
       "composite_fair_price": 531.93,
+      "valuation_bucket": "FAIR",
       "fv_error": null,
-      "gap_to_fair_pct": 0.07,
       "composite_gain_pct": 0.07,
-      "fair_gap_pct": 0.07
+      "fair_gap_pct": 0.07,
+      "gap_to_fair_pct": 0.07,
+      "fv_model_count": 3
     }
   }
 }

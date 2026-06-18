@@ -1,5 +1,5 @@
 {
-  "last_run_at": "2026-06-18 16:10:56",
+  "last_run_at": "2026-06-18 17:24:07",
   "clause_names": [
     "ema9_5min_breakout",
     "ema9_daily_signal"
@@ -792,13 +792,13 @@
         "lr_slope_pct": -0.092,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 442.08,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 3.15,
         "composite_gain_pct": 3.15,
-        "fair_gap_pct": 3.15
+        "fair_gap_pct": 3.15,
+        "gap_to_fair_pct": 3.15,
+        "fv_model_count": 3
       },
       {
         "ticker": "BHEL",
@@ -1551,13 +1551,13 @@
         "lr_slope_pct": 0.8062,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 2,
-        "valuation_bucket": "OVERVALUED",
         "composite_fair_price": 213.51,
+        "valuation_bucket": "OVERVALUED",
         "fv_error": null,
-        "gap_to_fair_pct": -47.4,
         "composite_gain_pct": -47.4,
-        "fair_gap_pct": -47.4
+        "fair_gap_pct": -47.4,
+        "gap_to_fair_pct": -47.4,
+        "fv_model_count": 2
       },
       {
         "ticker": "JSWENERGY",
@@ -2310,13 +2310,13 @@
         "lr_slope_pct": 0.2817,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 638.71,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 10.97,
         "composite_gain_pct": 10.98,
-        "fair_gap_pct": 10.98
+        "fair_gap_pct": 10.98,
+        "gap_to_fair_pct": 10.97,
+        "fv_model_count": 3
       },
       {
         "ticker": "JSWSTEEL",
@@ -3069,13 +3069,13 @@
         "lr_slope_pct": 0.2047,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 2,
-        "valuation_bucket": "OVERVALUED",
         "composite_fair_price": 1043.03,
+        "valuation_bucket": "OVERVALUED",
         "fv_error": null,
-        "gap_to_fair_pct": -19.39,
         "composite_gain_pct": -19.39,
-        "fair_gap_pct": -19.39
+        "fair_gap_pct": -19.39,
+        "gap_to_fair_pct": -19.39,
+        "fv_model_count": 2
       },
       {
         "ticker": "GVT&D",
@@ -3828,13 +3828,13 @@
         "lr_slope_pct": 0.5441,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 0,
-        "valuation_bucket": "N/A",
         "composite_fair_price": null,
+        "valuation_bucket": "N/A",
         "fv_error": "SMA_ERROR: Could not scrape P&L from Screener.in",
-        "gap_to_fair_pct": null,
         "composite_gain_pct": null,
-        "fair_gap_pct": null
+        "fair_gap_pct": null,
+        "gap_to_fair_pct": null,
+        "fv_model_count": 0
       },
       {
         "ticker": "POWERINDIA",
@@ -4587,13 +4587,13 @@
         "lr_slope_pct": 0.6336,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 32793.56,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -9.66,
         "composite_gain_pct": -9.66,
-        "fair_gap_pct": -9.66
+        "fair_gap_pct": -9.66,
+        "gap_to_fair_pct": -9.66,
+        "fv_model_count": 3
       },
       {
         "ticker": "SIEMENS",
@@ -5346,13 +5346,13 @@
         "lr_slope_pct": 0.2616,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 2,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 3507.19,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -6.38,
         "composite_gain_pct": -6.38,
-        "fair_gap_pct": -6.38
+        "fair_gap_pct": -6.38,
+        "gap_to_fair_pct": -6.38,
+        "fv_model_count": 2
       },
       {
         "ticker": "DMART",
@@ -6105,13 +6105,13 @@
         "lr_slope_pct": -0.0796,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 2,
-        "valuation_bucket": "UNDERVALUED",
         "composite_fair_price": 5040.04,
+        "valuation_bucket": "UNDERVALUED",
         "fv_error": null,
-        "gap_to_fair_pct": 17.03,
         "composite_gain_pct": 17.03,
-        "fair_gap_pct": 17.03
+        "fair_gap_pct": 17.03,
+        "gap_to_fair_pct": 17.03,
+        "fv_model_count": 2
       },
       {
         "ticker": "VBL",
@@ -6864,13 +6864,13 @@
         "lr_slope_pct": 0.5147,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 531.93,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 0.07,
         "composite_gain_pct": 0.07,
-        "fair_gap_pct": 0.07
+        "fair_gap_pct": 0.07,
+        "gap_to_fair_pct": 0.07,
+        "fv_model_count": 3
       },
       {
         "ticker": "BSE",
@@ -7623,13 +7623,13 @@
         "lr_slope_pct": 0.6337,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 3870.97,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -3.58,
         "composite_gain_pct": -3.58,
-        "fair_gap_pct": -3.58
+        "fair_gap_pct": -3.58,
+        "gap_to_fair_pct": -3.58,
+        "fv_model_count": 3
       },
       {
         "ticker": "CANBK",
@@ -8382,13 +8382,13 @@
         "lr_slope_pct": -0.0231,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 120.26,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -10.9,
         "composite_gain_pct": -10.9,
-        "fair_gap_pct": -10.9
+        "fair_gap_pct": -10.9,
+        "gap_to_fair_pct": -10.9,
+        "fv_model_count": 3
       },
       {
         "ticker": "DIXON",
@@ -9141,13 +9141,13 @@
         "lr_slope_pct": 0.2653,
         "above_50sma": true,
         "above_200sma": false,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 14124.36,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 11.51,
         "composite_gain_pct": 11.51,
-        "fair_gap_pct": 11.51
+        "fair_gap_pct": 11.51,
+        "gap_to_fair_pct": 11.51,
+        "fv_model_count": 3
       },
       {
         "ticker": "EXIDEIND",
@@ -9900,13 +9900,13 @@
         "lr_slope_pct": 0.4844,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 2,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 335.59,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -12.8,
         "composite_gain_pct": -12.8,
-        "fair_gap_pct": -12.8
+        "fair_gap_pct": -12.8,
+        "gap_to_fair_pct": -12.8,
+        "fv_model_count": 2
       },
       {
         "ticker": "OBEROIRLTY",
@@ -10659,13 +10659,13 @@
         "lr_slope_pct": 0.1332,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 1787.11,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 5.48,
         "composite_gain_pct": 5.49,
-        "fair_gap_pct": 5.49
+        "fair_gap_pct": 5.49,
+        "gap_to_fair_pct": 5.48,
+        "fv_model_count": 3
       },
       {
         "ticker": "POLYCAB",
@@ -11418,13 +11418,13 @@
         "lr_slope_pct": 0.616,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 9497.26,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -4.57,
         "composite_gain_pct": -4.57,
-        "fair_gap_pct": -4.57
+        "fair_gap_pct": -4.57,
+        "gap_to_fair_pct": -4.57,
+        "fv_model_count": 3
       },
       {
         "ticker": "UNIONBANK",
@@ -12177,13 +12177,13 @@
         "lr_slope_pct": -0.1516,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 153.61,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -12.78,
         "composite_gain_pct": -12.78,
-        "fair_gap_pct": -12.78
+        "fair_gap_pct": -12.78,
+        "gap_to_fair_pct": -12.78,
+        "fv_model_count": 3
       }
     ],
     "prime_targets": [
@@ -12938,13 +12938,13 @@
         "lr_slope_pct": -0.092,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 442.08,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 3.15,
         "composite_gain_pct": 3.15,
-        "fair_gap_pct": 3.15
+        "fair_gap_pct": 3.15,
+        "gap_to_fair_pct": 3.15,
+        "fv_model_count": 3
       },
       {
         "ticker": "JSWENERGY",
@@ -13697,13 +13697,13 @@
         "lr_slope_pct": 0.2817,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 638.71,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 10.97,
         "composite_gain_pct": 10.98,
-        "fair_gap_pct": 10.98
+        "fair_gap_pct": 10.98,
+        "gap_to_fair_pct": 10.97,
+        "fv_model_count": 3
       },
       {
         "ticker": "DMART",
@@ -14456,13 +14456,13 @@
         "lr_slope_pct": -0.0796,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 2,
-        "valuation_bucket": "UNDERVALUED",
         "composite_fair_price": 5040.04,
+        "valuation_bucket": "UNDERVALUED",
         "fv_error": null,
-        "gap_to_fair_pct": 17.03,
         "composite_gain_pct": 17.03,
-        "fair_gap_pct": 17.03
+        "fair_gap_pct": 17.03,
+        "gap_to_fair_pct": 17.03,
+        "fv_model_count": 2
       },
       {
         "ticker": "VBL",
@@ -15215,13 +15215,13 @@
         "lr_slope_pct": 0.5147,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 531.93,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 0.07,
         "composite_gain_pct": 0.07,
-        "fair_gap_pct": 0.07
+        "fair_gap_pct": 0.07,
+        "gap_to_fair_pct": 0.07,
+        "fv_model_count": 3
       },
       {
         "ticker": "DIXON",
@@ -15974,13 +15974,13 @@
         "lr_slope_pct": 0.2653,
         "above_50sma": true,
         "above_200sma": false,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 14124.36,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 11.51,
         "composite_gain_pct": 11.51,
-        "fair_gap_pct": 11.51
+        "fair_gap_pct": 11.51,
+        "gap_to_fair_pct": 11.51,
+        "fv_model_count": 3
       },
       {
         "ticker": "OBEROIRLTY",
@@ -16733,13 +16733,13 @@
         "lr_slope_pct": 0.1332,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 1787.11,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 5.48,
         "composite_gain_pct": 5.49,
-        "fair_gap_pct": 5.49
+        "fair_gap_pct": 5.49,
+        "gap_to_fair_pct": 5.48,
+        "fv_model_count": 3
       }
     ],
     "other_signals": [
@@ -17494,13 +17494,13 @@
         "lr_slope_pct": 0.8062,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 2,
-        "valuation_bucket": "OVERVALUED",
         "composite_fair_price": 213.51,
+        "valuation_bucket": "OVERVALUED",
         "fv_error": null,
-        "gap_to_fair_pct": -47.4,
         "composite_gain_pct": -47.4,
-        "fair_gap_pct": -47.4
+        "fair_gap_pct": -47.4,
+        "gap_to_fair_pct": -47.4,
+        "fv_model_count": 2
       },
       {
         "ticker": "JSWSTEEL",
@@ -18253,13 +18253,13 @@
         "lr_slope_pct": 0.2047,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 2,
-        "valuation_bucket": "OVERVALUED",
         "composite_fair_price": 1043.03,
+        "valuation_bucket": "OVERVALUED",
         "fv_error": null,
-        "gap_to_fair_pct": -19.39,
         "composite_gain_pct": -19.39,
-        "fair_gap_pct": -19.39
+        "fair_gap_pct": -19.39,
+        "gap_to_fair_pct": -19.39,
+        "fv_model_count": 2
       },
       {
         "ticker": "GVT&D",
@@ -19012,13 +19012,13 @@
         "lr_slope_pct": 0.5441,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 0,
-        "valuation_bucket": "N/A",
         "composite_fair_price": null,
+        "valuation_bucket": "N/A",
         "fv_error": "SMA_ERROR: Could not scrape P&L from Screener.in",
-        "gap_to_fair_pct": null,
         "composite_gain_pct": null,
-        "fair_gap_pct": null
+        "fair_gap_pct": null,
+        "gap_to_fair_pct": null,
+        "fv_model_count": 0
       },
       {
         "ticker": "POWERINDIA",
@@ -19771,13 +19771,13 @@
         "lr_slope_pct": 0.6336,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 32793.56,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -9.66,
         "composite_gain_pct": -9.66,
-        "fair_gap_pct": -9.66
+        "fair_gap_pct": -9.66,
+        "gap_to_fair_pct": -9.66,
+        "fv_model_count": 3
       },
       {
         "ticker": "SIEMENS",
@@ -20530,13 +20530,13 @@
         "lr_slope_pct": 0.2616,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 2,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 3507.19,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -6.38,
         "composite_gain_pct": -6.38,
-        "fair_gap_pct": -6.38
+        "fair_gap_pct": -6.38,
+        "gap_to_fair_pct": -6.38,
+        "fv_model_count": 2
       },
       {
         "ticker": "BSE",
@@ -21289,13 +21289,13 @@
         "lr_slope_pct": 0.6337,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 3870.97,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -3.58,
         "composite_gain_pct": -3.58,
-        "fair_gap_pct": -3.58
+        "fair_gap_pct": -3.58,
+        "gap_to_fair_pct": -3.58,
+        "fv_model_count": 3
       },
       {
         "ticker": "CANBK",
@@ -22048,13 +22048,13 @@
         "lr_slope_pct": -0.0231,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 120.26,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -10.9,
         "composite_gain_pct": -10.9,
-        "fair_gap_pct": -10.9
+        "fair_gap_pct": -10.9,
+        "gap_to_fair_pct": -10.9,
+        "fv_model_count": 3
       },
       {
         "ticker": "EXIDEIND",
@@ -22807,13 +22807,13 @@
         "lr_slope_pct": 0.4844,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 2,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 335.59,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -12.8,
         "composite_gain_pct": -12.8,
-        "fair_gap_pct": -12.8
+        "fair_gap_pct": -12.8,
+        "gap_to_fair_pct": -12.8,
+        "fv_model_count": 2
       },
       {
         "ticker": "POLYCAB",
@@ -23566,13 +23566,13 @@
         "lr_slope_pct": 0.616,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 9497.26,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -4.57,
         "composite_gain_pct": -4.57,
-        "fair_gap_pct": -4.57
+        "fair_gap_pct": -4.57,
+        "gap_to_fair_pct": -4.57,
+        "fv_model_count": 3
       },
       {
         "ticker": "UNIONBANK",
@@ -24325,13 +24325,13 @@
         "lr_slope_pct": -0.1516,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 153.61,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": -12.78,
         "composite_gain_pct": -12.78,
-        "fair_gap_pct": -12.78
+        "fair_gap_pct": -12.78,
+        "gap_to_fair_pct": -12.78,
+        "fv_model_count": 3
       }
     ],
     "undervalued_signals": [
@@ -25086,13 +25086,13 @@
         "lr_slope_pct": -0.092,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 442.08,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 3.15,
         "composite_gain_pct": 3.15,
-        "fair_gap_pct": 3.15
+        "fair_gap_pct": 3.15,
+        "gap_to_fair_pct": 3.15,
+        "fv_model_count": 3
       },
       {
         "ticker": "JSWENERGY",
@@ -25845,13 +25845,13 @@
         "lr_slope_pct": 0.2817,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 638.71,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 10.97,
         "composite_gain_pct": 10.98,
-        "fair_gap_pct": 10.98
+        "fair_gap_pct": 10.98,
+        "gap_to_fair_pct": 10.97,
+        "fv_model_count": 3
       },
       {
         "ticker": "DMART",
@@ -26604,13 +26604,13 @@
         "lr_slope_pct": -0.0796,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 2,
-        "valuation_bucket": "UNDERVALUED",
         "composite_fair_price": 5040.04,
+        "valuation_bucket": "UNDERVALUED",
         "fv_error": null,
-        "gap_to_fair_pct": 17.03,
         "composite_gain_pct": 17.03,
-        "fair_gap_pct": 17.03
+        "fair_gap_pct": 17.03,
+        "gap_to_fair_pct": 17.03,
+        "fv_model_count": 2
       },
       {
         "ticker": "VBL",
@@ -27363,13 +27363,13 @@
         "lr_slope_pct": 0.5147,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 531.93,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 0.07,
         "composite_gain_pct": 0.07,
-        "fair_gap_pct": 0.07
+        "fair_gap_pct": 0.07,
+        "gap_to_fair_pct": 0.07,
+        "fv_model_count": 3
       },
       {
         "ticker": "DIXON",
@@ -28122,13 +28122,13 @@
         "lr_slope_pct": 0.2653,
         "above_50sma": true,
         "above_200sma": false,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 14124.36,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 11.51,
         "composite_gain_pct": 11.51,
-        "fair_gap_pct": 11.51
+        "fair_gap_pct": 11.51,
+        "gap_to_fair_pct": 11.51,
+        "fv_model_count": 3
       },
       {
         "ticker": "OBEROIRLTY",
@@ -28881,13 +28881,13 @@
         "lr_slope_pct": 0.1332,
         "above_50sma": true,
         "above_200sma": true,
-        "fv_model_count": 3,
-        "valuation_bucket": "FAIR",
         "composite_fair_price": 1787.11,
+        "valuation_bucket": "FAIR",
         "fv_error": null,
-        "gap_to_fair_pct": 5.48,
         "composite_gain_pct": 5.49,
-        "fair_gap_pct": 5.49
+        "fair_gap_pct": 5.49,
+        "gap_to_fair_pct": 5.48,
+        "fv_model_count": 3
       }
     ],
     "filtered_by_trend": [
