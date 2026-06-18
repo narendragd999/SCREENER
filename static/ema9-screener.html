@@ -1894,8 +1894,73 @@ function toggleFailed() {
 // ═══════════════════════════════════════════════════════════
 
 function openChartForTicker(ticker) {
-  const sig = _allSignals[ticker];
-  if (sig) openChart(sig);
+  // 1) Try the in-memory manual-screener store first (populated by renderResults)
+  let sig = _allSignals[ticker];
+
+  // 2) Fall back to the Chartink live-feed store in localStorage.
+  //    Without this fallback, clicking a row in the Chartink tab does nothing
+  //    because those signals never get added to _allSignals on a fresh page load.
+  if (!sig) {
+    try {
+      const ckStore = _ckLoadStore();
+      if (ckStore && ckStore[ticker]) {
+        sig = ckStore[ticker];
+        // Also warm _allSignals so future clicks skip the localStorage lookup
+        _allSignals[ticker] = sig;
+      }
+    } catch (e) {
+      console.warn('[openChartForTicker] Failed to read chartink store for', ticker, e);
+    }
+  }
+
+  if (sig) {
+    // If the candle array is missing (e.g. localStorage quota stripped it,
+    // or signal came from a path that didn't include candles), fetch it
+    // on-demand from the quick-scan endpoint so the chart still renders.
+    if (!sig.candles || !sig.candles.length) {
+      console.info('[openChartForTicker] No candles cached for', ticker, '— fetching via quick-scan…');
+      if (typeof setChartinkStatus === 'function') {
+        setChartinkStatus(`Loading chart for ${ticker}…`, 'info');
+      }
+      openChart(sig); // open modal immediately with the metadata we have
+      _fetchCandlesAndRenderChart(ticker);
+      return;
+    }
+    openChart(sig);
+  } else {
+    // Last resort: surface a tiny toast so the user knows the click was registered
+    // but the signal data isn't available locally (e.g. cleared store, race condition).
+    console.warn('[openChartForTicker] No signal data found for', ticker);
+    if (typeof setChartinkStatus === 'function') {
+      setChartinkStatus(`No cached chart data for ${ticker}. Try re-scanning.`, 'danger');
+    }
+  }
+}
+
+// Fetches fresh candle data for a ticker via the quick-scan endpoint and
+// re-renders the chart modal. Used when the cached signal is missing candles.
+async function _fetchCandlesAndRenderChart(ticker) {
+  try {
+    const resp = await fetch(`/api/ema9/quick-scan/${encodeURIComponent(ticker)}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const fresh = await resp.json();
+    if (fresh && fresh.candles && fresh.candles.length) {
+      // Merge fresh data into the in-memory cache
+      _allSignals[ticker] = { ..._allSignals[ticker], ...fresh };
+      // Re-render the chart with the fresh candles
+      openChart(_allSignals[ticker]);
+      if (typeof setChartinkStatus === 'function') {
+        setChartinkStatus(`Chart loaded for ${ticker}`, 'success');
+      }
+    } else {
+      throw new Error('No candles in quick-scan response');
+    }
+  } catch (err) {
+    console.error('[openChartForTicker] quick-scan fetch failed for', ticker, err);
+    if (typeof setChartinkStatus === 'function') {
+      setChartinkStatus(`Failed to load chart for ${ticker}: ${err.message}`, 'danger');
+    }
+  }
 }
 
 function openChart(signal) {
@@ -2743,6 +2808,18 @@ function _ckRenderStore() {
   const store = _ckLoadStore();
   const meta  = _ckLoadMeta();
   const allEntries = Object.values(store);
+
+  // ── Warm up _allSignals from the persistent store ────────────────────
+  // Without this, clicking a row on a freshly-loaded page does nothing
+  // because _allSignals is in-memory only and isn't repopulated until the
+  // next backend scan. The chart modal's openChartForTicker() needs this map.
+  if (typeof _allSignals !== 'undefined' && _allSignals) {
+    Object.values(store).forEach(sig => {
+      if (sig && sig.ticker && !_allSignals[sig.ticker]) {
+        _allSignals[sig.ticker] = sig;
+      }
+    });
+  }
 
   const nowMs     = Date.now();
   const lastScanMs = meta.last_scan_at_epoch || 0;

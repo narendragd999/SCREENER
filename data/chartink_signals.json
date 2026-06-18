@@ -1,5 +1,5 @@
 {
-  "last_run_at": "2026-06-18 15:50:56",
+  "last_run_at": "2026-06-18 16:10:56",
   "clause_names": [
     "ema9_5min_breakout",
     "ema9_daily_signal"
@@ -5348,7 +5348,7 @@
         "above_200sma": true,
         "fv_model_count": 2,
         "valuation_bucket": "FAIR",
-        "composite_fair_price": 3507.18,
+        "composite_fair_price": 3507.19,
         "fv_error": null,
         "gap_to_fair_pct": -6.38,
         "composite_gain_pct": -6.38,
@@ -20532,7 +20532,7 @@
         "above_200sma": true,
         "fv_model_count": 2,
         "valuation_bucket": "FAIR",
-        "composite_fair_price": 3507.18,
+        "composite_fair_price": 3507.19,
         "fv_error": null,
         "gap_to_fair_pct": -6.38,
         "composite_gain_pct": -6.38,
