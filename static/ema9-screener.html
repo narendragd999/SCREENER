@@ -76,6 +76,22 @@ tailwind.config = {
     background: rgba(0,229,160,0.06) !important;
   }
 
+  /* ★ FRESH crossover row tint — breakout happened yesterday's daily close,
+     confirmed today. This is the prime buy-window signal. */
+  .signal-row.fresh-crossover-row {
+    background: linear-gradient(90deg,
+      rgba(16,185,129,0.10) 0%,
+      rgba(16,185,129,0.04) 60%,
+      transparent 100%);
+    box-shadow: inset 3px 0 0 0 #10b981;
+  }
+  .signal-row.fresh-crossover-row:hover {
+    background: linear-gradient(90deg,
+      rgba(16,185,129,0.18) 0%,
+      rgba(16,185,129,0.08) 60%,
+      rgba(0,229,160,0.06) 100%) !important;
+  }
+
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: #0a1628; }
   ::-webkit-scrollbar-thumb { background: #1a2d4a; border-radius: 3px; }
@@ -638,7 +654,11 @@ tailwind.config = {
 
   <!-- ═══════════════ SUMMARY STATS ═══════════════ -->
   <section id="chartinkSummarySection" class="hidden">
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <div class="glass-card rounded-xl p-4 text-center" style="background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(16,185,129,.04));border:1px solid rgba(16,185,129,.35);box-shadow:0 0 18px rgba(16,185,129,.18);">
+        <p class="font-mono text-2xl font-700 text-emerald-400" id="chartinkStatFresh">0</p>
+        <p class="font-ui text-xs text-emerald-400/80 mt-1">★ FRESH CROSSOVERS<br><span class="text-[10px] text-slate-500">(Today/Yesterday)</span></p>
+      </div>
       <div class="glass-card rounded-xl p-4 text-center">
         <p class="font-mono text-2xl font-700 text-white" id="chartinkStatTotal">0</p>
         <p class="font-ui text-xs text-slate-500 mt-1">Stored Signals</p>
@@ -674,6 +694,8 @@ tailwind.config = {
           <select id="chartinkPrimeSortSelect" onchange="sortChartinkTable('prime')"
             class="bg-card2 border border-border/50 rounded-lg px-3 py-1 font-mono text-xs text-slate-300
                    focus:outline-none focus:border-accent/50">
+            <option value="fresh_first">★ Fresh Crossovers First (Today/Yesterday)</option>
+            <option value="initial_ema9_asc">Cleanest Crossover ↑ (Smallest BO Gap)</option>
             <option value="gap_desc">Gap to FV ↓ (Most Undervalued)</option>
             <option value="gap_asc">Gap to FV ↑ (Least Undervalued)</option>
             <option value="candles_asc">Freshness ↑ (Newest Signal)</option>
@@ -691,6 +713,8 @@ tailwind.config = {
               <th class="px-4 py-3">Price</th>
               <th class="px-4 py-3">3% Target</th>
               <th class="px-4 py-3">EMA 9</th>
+              <th class="px-4 py-3">BO EMA9 Gap%</th>
+              <th class="px-4 py-3">Curr EMA9 Gap%</th>
               <th class="px-4 py-3">SMA 50</th>
               <th class="px-4 py-3">Fair Value</th>
               <th class="px-4 py-3">Gap to FV</th>
@@ -719,6 +743,8 @@ tailwind.config = {
           <select id="chartinkOtherSortSelect" onchange="sortChartinkTable('other')"
             class="bg-card2 border border-border/50 rounded-lg px-3 py-1 font-mono text-xs text-slate-300
                    focus:outline-none focus:border-warn/50">
+            <option value="fresh_first">★ Fresh Crossovers First (Today/Yesterday)</option>
+            <option value="initial_ema9_asc">Cleanest Crossover ↑ (Smallest BO Gap)</option>
             <option value="candles_asc">Freshness ↑ (Newest Signal)</option>
             <option value="candles_desc">Freshness ↓ (Oldest Signal)</option>
             <option value="gap_asc">Gap to FV ↑ (Closest to FV)</option>
@@ -736,6 +762,8 @@ tailwind.config = {
               <th class="px-4 py-3">Price</th>
               <th class="px-4 py-3">3% Target</th>
               <th class="px-4 py-3">EMA 9</th>
+              <th class="px-4 py-3">BO EMA9 Gap%</th>
+              <th class="px-4 py-3">Curr EMA9 Gap%</th>
               <th class="px-4 py-3">SMA 50</th>
               <th class="px-4 py-3">Fair Value</th>
               <th class="px-4 py-3">Gap to FV</th>
@@ -1245,12 +1273,22 @@ function storeSignal(sig) {
 function _sortSignalArray(arr, sortKey) {
   return [...arr].sort((a, b) => {
     switch (sortKey) {
-      case 'gap_desc':  return (b.gap_to_fair_pct ?? -999) - (a.gap_to_fair_pct ?? -999);
-      case 'gap_asc':   return (a.gap_to_fair_pct ?? 999)  - (b.gap_to_fair_pct ?? 999);
-      case 'candles_asc':  return (a.candles_ago ?? 999) - (b.candles_ago ?? 999);
-      case 'candles_desc': return (b.candles_ago ?? 0)   - (a.candles_ago ?? 0);
-      case 'price_desc': return (b.current_price ?? 0) - (a.current_price ?? 0);
-      case 'price_asc':  return (a.current_price ?? 0) - (b.current_price ?? 0);
+      case 'gap_desc':            return (b.gap_to_fair_pct ?? -999) - (a.gap_to_fair_pct ?? -999);
+      case 'gap_asc':             return (a.gap_to_fair_pct ?? 999)  - (b.gap_to_fair_pct ?? 999);
+      case 'candles_asc':         return (a.candles_ago ?? 999) - (b.candles_ago ?? 999);
+      case 'candles_desc':        return (b.candles_ago ?? 0)   - (a.candles_ago ?? 0);
+      case 'price_desc':          return (b.current_price ?? 0) - (a.current_price ?? 0);
+      case 'price_asc':           return (a.current_price ?? 0) - (b.current_price ?? 0);
+      // ── New 9EMA-distance sorts ──────────────────────────────────────
+      case 'fresh_first':         // Fresh crossovers first (candles_ago ≤ 1), then by candles_ago asc
+        const aFresh = (a.is_fresh_crossover === true) ? 0 : 1;
+        const bFresh = (b.is_fresh_crossover === true) ? 0 : 1;
+        if (aFresh !== bFresh) return aFresh - bFresh;
+        return (a.candles_ago ?? 999) - (b.candles_ago ?? 999);
+      case 'initial_ema9_asc':   // Smallest initial gap first = cleanest crossover
+        return Math.abs(a.initial_ema9_dist_pct ?? 999) - Math.abs(b.initial_ema9_dist_pct ?? 999);
+      case 'initial_ema9_desc':  // Largest initial gap first = most extended
+        return Math.abs(b.initial_ema9_dist_pct ?? 0)   - Math.abs(a.initial_ema9_dist_pct ?? 0);
       default: return 0;
     }
   });
@@ -1762,12 +1800,62 @@ function buildRow(s, isPrime) {
     : '<span class="badge-fresh font-mono text-xs px-2 py-0.5 rounded-full">FRESH</span>';
   const targetClass = isPrime ? 'glow-target font-mono font-600' : 'font-mono text-slate-300';
 
+  // ─── 9EMA distance cells (new) ────────────────────────────────────
+  // BO EMA9 Gap% : distance from 9EMA on the BREAKOUT day (crossover day).
+  //   Small + positive (0% to +2%) = clean crossover → tighter stop, better R:R.
+  //   Large positive (>+3%) = price already extended → risky chase entry.
+  //   Null = data not available.
+  //
+  // Curr EMA9 Gap% : signed distance from 9EMA RIGHT NOW (live).
+  //   Positive = price still above 9EMA (signal intact).
+  //   Negative = price has fallen back below 9EMA (signal invalid — avoid).
+  const boGap     = s.initial_ema9_dist_pct;
+  const currGap   = s.current_ema9_dist_pct_signed;
+
+  function _ema9GapCell(val, isInitial) {
+    if (val == null) return `<td class="px-4 py-3 font-mono text-slate-600">—</td>`;
+    const sign    = val >= 0 ? '+' : '';
+    const absVal  = Math.abs(val);
+    let cls;
+    if (isInitial) {
+      // Initial gap: smaller is better (cleaner crossover)
+      if (absVal <= 1.0)      cls = 'text-emerald-400 font-600';   // ★ Cleanest
+      else if (absVal <= 2.0) cls = 'text-accent';                 // ✓ Good
+      else if (absVal <= 3.5) cls = 'text-warn';                   // ⚠ Extended
+      else                    cls = 'text-danger';                 // ✗ Too stretched
+    } else {
+      // Current gap: must stay positive (signal alive)
+      if (val < 0)             cls = 'text-danger line-through';   // Invalid
+      else if (absVal <= 1.0)  cls = 'text-emerald-400';
+      else if (absVal <= 3.0)  cls = 'text-accent';
+      else                     cls = 'text-warn';
+    }
+    return `<td class="px-4 py-3 font-mono ${cls}" title="${isInitial ? 'Distance from 9EMA on breakout day' : 'Live signed distance from 9EMA (negative = invalid)'}">${sign}${val.toFixed(2)}%</td>`;
+  }
+  const boGapCell   = _ema9GapCell(boGap,   true);
+  const currGapCell = _ema9GapCell(currGap, false);
+
+  // ─── FRESH crossover badge + row tint ─────────────────────────────
+  // is_fresh_crossover = True when candles_ago <= 1 (breakout happened
+  // yesterday's daily close, confirmed today). This is the prime buy window.
+  const isFresh = s.is_fresh_crossover === true;
+  const freshBadge = isFresh
+    ? `<span style="display:inline-block;margin-left:6px;font-size:9px;font-weight:700;
+            letter-spacing:.05em;background:rgba(16,185,129,.22);color:#10b981;
+            border:1px solid rgba(16,185,129,.55);border-radius:4px;
+            padding:1px 5px;vertical-align:middle;line-height:1.5;
+            box-shadow:0 0 8px rgba(16,185,129,.35);">★ FRESH</span>`
+    : '';
+  const rowTintCls = isFresh ? 'fresh-crossover-row' : '';
+
   return `
-    <tr class="signal-row border-b border-border/20" data-ticker="${s.ticker}" onclick='openChartForTicker("${s.ticker}")'>
-      <td class="px-4 py-3 font-ui font-700 text-white">${s.ticker}</td>
+    <tr class="signal-row border-b border-border/20 ${rowTintCls}" data-ticker="${s.ticker}" onclick='openChartForTicker("${s.ticker}")'>
+      <td class="px-4 py-3 font-ui font-700 text-white">${s.ticker}${freshBadge}</td>
       <td class="px-4 py-3 font-mono text-slate-300">₹${fmtNum(s.current_price)}</td>
       <td class="px-4 py-3 ${targetClass}">₹${fmtNum(s.target_3pct)}</td>
       <td class="px-4 py-3 font-mono text-accent2">₹${fmtNum(s.ema9_value)}</td>
+      ${boGapCell}
+      ${currGapCell}
       <td class="px-4 py-3 font-mono text-warn">₹${fmtNum(s.sma50_value)}</td>
       <td class="px-4 py-3 fv-cell">${fvCellHTML} ${fvFetchHTML}</td>
       <td class="px-4 py-3 fv-gap-cell font-mono ${gapFvClass}">${gapFvStr}</td>
@@ -2703,14 +2791,25 @@ function _ckRenderStore() {
   // Filtered/failed stats come from last scan (we don't accumulate those)
   document.getElementById('chartinkStatFiltered').textContent = meta.last_scan_filtered || 0;
   document.getElementById('chartinkStatFailed').textContent   = meta.last_scan_failed   || 0;
+  // FRESH crossovers (breakout happened yesterday's close, confirmed today)
+  const freshCount = allEntries.filter(s => s.is_fresh_crossover === true).length;
+  const freshEl = document.getElementById('chartinkStatFresh');
+  if (freshEl) freshEl.textContent = freshCount;
 
   // Build rows with NEW badge for this scan's batch — uses module-level _buildCkStoreRow
+
+  // Sort keys that need EXPLICIT re-sort via _sortSignalArray.
+  // Any key in this set always overrides the default isNew-then-candles_ago sort.
+  const _EXPLICIT_SORT_KEYS = new Set([
+    'gap_desc', 'gap_asc', 'price_desc', 'price_asc',
+    'fresh_first', 'initial_ema9_asc', 'initial_ema9_desc',
+  ]);
 
   if (primes.length) {
     document.getElementById('chartinkPrimeSection').classList.remove('hidden');
     document.getElementById('chartinkPrimeCount').textContent = primes.length;
-    const primeSortKey = document.getElementById('chartinkPrimeSortSelect')?.value || 'gap_desc';
-    const sortedPrimes = primeSortKey === 'gap_desc' || primeSortKey === 'gap_asc' || primeSortKey === 'price_desc' || primeSortKey === 'price_asc'
+    const primeSortKey = document.getElementById('chartinkPrimeSortSelect')?.value || 'fresh_first';
+    const sortedPrimes = _EXPLICIT_SORT_KEYS.has(primeSortKey)
       ? _sortSignalArray(primes, primeSortKey)
       : primes; // for candles sorts, the default sortFn already sorted above
     document.getElementById('chartinkPrimeTableBody').innerHTML = sortedPrimes.map(s => _buildCkStoreRow(s, true, meta)).join('');
@@ -2721,8 +2820,8 @@ function _ckRenderStore() {
   if (others.length) {
     document.getElementById('chartinkOtherSection').classList.remove('hidden');
     document.getElementById('chartinkOtherCount').textContent = others.length;
-    const otherSortKey = document.getElementById('chartinkOtherSortSelect')?.value || 'candles_asc';
-    const sortedOthers = otherSortKey === 'gap_desc' || otherSortKey === 'gap_asc' || otherSortKey === 'price_desc' || otherSortKey === 'price_asc'
+    const otherSortKey = document.getElementById('chartinkOtherSortSelect')?.value || 'fresh_first';
+    const sortedOthers = _EXPLICIT_SORT_KEYS.has(otherSortKey)
       ? _sortSignalArray(others, otherSortKey)
       : others;
     document.getElementById('chartinkOtherTableBody').innerHTML = sortedOthers.map(s => _buildCkStoreRow(s, false, meta)).join('');
