@@ -73,5 +73,99 @@
       "VMM"
     ],
     "count": 33
+  },
+  {
+    "time": "2026-06-19 07:29:52",
+    "clause_names": [
+      "ema9_5min_breakout",
+      "ema9_daily_signal"
+    ],
+    "per_clause": {
+      "ema9_5min_breakout": 16,
+      "ema9_daily_signal": 21
+    },
+    "symbols": [
+      "APOLLOHOSP",
+      "BEL",
+      "BHEL",
+      "BSE",
+      "CANBK",
+      "COALINDIA",
+      "COCHINSHIP",
+      "CROMPTON",
+      "DIXON",
+      "DMART",
+      "EXIDEIND",
+      "GVT&D",
+      "HAL",
+      "HINDZINC",
+      "INFY",
+      "JSWENERGY",
+      "JSWSTEEL",
+      "LTM",
+      "MANKIND",
+      "NESTLEIND",
+      "NHPC",
+      "NTPC",
+      "OBEROIRLTY",
+      "POLYCAB",
+      "POWERINDIA",
+      "RBLBANK",
+      "SIEMENS",
+      "SUNPHARMA",
+      "TECHM",
+      "TRENT",
+      "UNIONBANK",
+      "VBL",
+      "VMM"
+    ],
+    "count": 33
+  },
+  {
+    "time": "2026-06-19 07:34:52",
+    "clause_names": [
+      "ema9_5min_breakout",
+      "ema9_daily_signal"
+    ],
+    "per_clause": {
+      "ema9_5min_breakout": 16,
+      "ema9_daily_signal": 21
+    },
+    "symbols": [
+      "APOLLOHOSP",
+      "BEL",
+      "BHEL",
+      "BSE",
+      "CANBK",
+      "COALINDIA",
+      "COCHINSHIP",
+      "CROMPTON",
+      "DIXON",
+      "DMART",
+      "EXIDEIND",
+      "GVT&D",
+      "HAL",
+      "HINDZINC",
+      "INFY",
+      "JSWENERGY",
+      "JSWSTEEL",
+      "LTM",
+      "MANKIND",
+      "NESTLEIND",
+      "NHPC",
+      "NTPC",
+      "OBEROIRLTY",
+      "POLYCAB",
+      "POWERINDIA",
+      "RBLBANK",
+      "SIEMENS",
+      "SUNPHARMA",
+      "TECHM",
+      "TRENT",
+      "UNIONBANK",
+      "VBL",
+      "VMM"
+    ],
+    "count": 33
   }
 ]

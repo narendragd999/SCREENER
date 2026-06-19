@@ -285,13 +285,13 @@ tailwind.config = {
 
   /* ── Critical layout fallbacks (survive Tailwind CDN failure) ── */
   header { padding: 1rem 1.5rem; border-bottom: 1px solid rgba(26,45,74,0.5); }
-  header > div { max-width: 80rem; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+  header > div { max-width: 96rem; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
   header .logo-wrap { display: flex; align-items: center; gap: 0.75rem; }
   header .logo-icon { width: 40px; height: 40px; min-width: 40px; border-radius: 8px; background: linear-gradient(135deg, #00e5a0, #00b8d4); display: flex; align-items: center; justify-content: center; overflow: hidden; }
   header .logo-icon svg { display: block; }
   header h1 { font-size: 1.2rem; font-weight: 800; color: #fff; margin: 0; white-space: nowrap; }
   header p  { font-size: 0.7rem; color: #64748b; margin: 0; }
-  main { max-width: 80rem; margin: 0 auto; padding: 2rem 1.5rem; }
+  main { max-width: 96rem; margin: 0 auto; padding: 2rem 1.5rem; }
 
   /* Tooltip */
   .fv-error-tip {
@@ -320,7 +320,7 @@ tailwind.config = {
 <body class="grid-bg">
 
 <header class="border-b border-border/50 py-4 px-6">
-  <div class="max-w-7xl mx-auto flex items-center justify-between">
+  <div class="max-w-screen-2xl mx-auto flex items-center justify-between">
     <div class="logo-wrap flex items-center gap-3">
       <div class="logo-icon w-10 h-10 rounded-lg bg-gradient-to-br from-accent to-accent2 flex items-center justify-center">
         <svg class="w-5 h-5" width="20" height="20" fill="none" stroke="#030912" stroke-width="2.5" viewBox="0 0 24 24">
@@ -356,7 +356,7 @@ tailwind.config = {
   </div>
 </header>
 
-<main class="max-w-7xl mx-auto px-6 py-8">
+<main class="max-w-screen-2xl mx-auto px-6 py-8">
 
 <!-- ═══════════════ SCREENER PANEL ═══════════════ -->
 <div id="screenerPanel" class="space-y-8">
@@ -1030,7 +1030,7 @@ tailwind.config = {
         </label>
         <label class="flex items-center gap-2 cursor-pointer" title="Fetch Fair Value per ticker (slower — uses Screener.in + yfinance)">
           <div class="relative">
-            <input type="checkbox" id="btFetchFV" class="sr-only peer">
+            <input type="checkbox" id="btFetchFV" checked class="sr-only peer">
             <div class="w-10 h-5 bg-card2 border border-border/50 rounded-full peer
                         peer-checked:bg-accent2/20 peer-checked:border-accent2/40 transition-all"></div>
             <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-slate-500 rounded-full transition-all
