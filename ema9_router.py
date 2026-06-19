@@ -188,27 +188,106 @@ def _batch_download(
 
 
 # ─────────────────────────────────────────────────────────────
+#  JSON SANITIZER — converts NaN / Infinity floats to None so the
+#  response can be JSON-serialized without raising
+#  "ValueError: Out of range float values are not JSON compliant".
+#
+#  Why this exists:
+#    yfinance occasionally returns rows where Open/High/Low/Close/Volume
+#    are NaN (delisted ticker, missing bar, network glitch). When our
+#    signal processor blindly does `float(...) / round(...)` on those
+#    values, NaN propagates into the response dict. Python's strict
+#    JSON encoder (used by FastAPI/Starlette) refuses NaN with a 500.
+#
+#  This sanitizer is the LAST line of defense — every router response
+#  is passed through it before being returned. Local guards in
+#  _compute_trend / _process_ticker_df remain as a first line.
+# ─────────────────────────────────────────────────────────────
+import math as _math
+
+
+def _json_safe(obj):
+    """
+    Recursively walk a dict/list/tuple/scalar and replace any non-finite
+    float (NaN, +Inf, -Inf) with None. Also converts numpy scalar types
+    (np.float64, np.int64, np.bool_) to native Python types so the
+    default JSON encoder doesn't choke on them.
+
+    Safe to call on any object — non-numeric values pass through unchanged.
+    """
+    # numpy scalar types — convert to native python first
+    try:
+        import numpy as _np
+        if isinstance(obj, _np.generic):
+            obj = obj.item()
+    except ImportError:
+        pass
+
+    if obj is None:
+        return None
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, (int,)):
+        return obj
+    if isinstance(obj, float):
+        # The critical check — NaN and Inf are not JSON-compliant
+        if _math.isnan(obj) or _math.isinf(obj):
+            return None
+        return obj
+    if isinstance(obj, str):
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    # Pandas Timestamp, datetime, etc. — stringify as fallback
+    try:
+        if hasattr(obj, 'isoformat'):
+            return obj.isoformat()
+    except Exception:
+        pass
+    # Last resort: try to coerce to float and re-check
+    try:
+        f = float(obj)
+        if _math.isnan(f) or _math.isinf(f):
+            return None
+        return f if f.is_integer() else f
+    except (TypeError, ValueError):
+        return str(obj)
+
+
+# ─────────────────────────────────────────────────────────────
 #  TREND DETECTION
 # ─────────────────────────────────────────────────────────────
 def _compute_trend(df: pd.DataFrame) -> Dict:
     n = len(df)
     close = df["Close"]
 
-    sma50  = float(close.rolling(50).mean().iloc[-1])  if n >= 50  else None
-    sma200 = float(close.rolling(200).mean().iloc[-1]) if n >= 200 else None
-    price  = float(close.iloc[-1])
+    # NaN-safe scalar extraction helper
+    def _safe_float(val):
+        try:
+            f = float(val)
+            return f if not _math.isnan(f) and not _math.isinf(f) else None
+        except (TypeError, ValueError):
+            return None
+
+    sma50  = _safe_float(close.rolling(50).mean().iloc[-1])  if n >= 50  else None
+    sma200 = _safe_float(close.rolling(200).mean().iloc[-1]) if n >= 200 else None
+    price  = _safe_float(close.iloc[-1])
 
     lr_slope_pct = 0.0
     if n >= 30:
         window = min(60, n)
         y  = close.iloc[-window:].values
         x  = np.arange(window, dtype=float)
-        if y.mean() != 0:
-            slope = np.polyfit(x, y, 1)[0]
-            lr_slope_pct = round(slope / y.mean() * 100, 4)
+        y_mean = _safe_float(y.mean())
+        if y_mean not in (None, 0):
+            slope = _safe_float(np.polyfit(x, y, 1)[0])
+            if slope is not None:
+                lr_slope_pct = round(slope / y_mean * 100, 4)
 
-    above_50sma  = (price > sma50)  if sma50  is not None else None
-    above_200sma = (price > sma200) if sma200 is not None else None
+    above_50sma  = (price > sma50)  if (sma50  is not None and price is not None) else None
+    above_200sma = (price > sma200) if (sma200 is not None and price is not None) else None
 
     if sma50 is not None and sma200 is not None:
         if above_50sma and sma50 > sma200 and lr_slope_pct > -0.05:
@@ -253,10 +332,32 @@ def _process_ticker_df(ticker: str, df: pd.DataFrame, max_candles_ago: int) -> D
     df["ema9"]  = df["Close"].ewm(span=9, adjust=False).mean()
     df["sma50"] = df["Close"].rolling(50).mean()
 
+    # NaN-safe float helper (local to this function — short name for readability)
+    def _sf(val):
+        """Convert to float; return None if NaN/Inf."""
+        try:
+            f = float(val)
+            return f if not _math.isnan(f) and not _math.isinf(f) else None
+        except (TypeError, ValueError):
+            return None
+
     n             = len(df)
-    current_price = round(float(df["Close"].iloc[-1]), 2)
-    current_ema9  = round(float(df["ema9"].iloc[-1]),  2)
-    current_sma50 = round(float(df["sma50"].iloc[-1]), 2) if not pd.isna(df["sma50"].iloc[-1]) else None
+    current_price = _sf(df["Close"].iloc[-1])
+    current_ema9  = _sf(df["ema9"].iloc[-1])
+    current_sma50 = _sf(df["sma50"].iloc[-1])
+
+    # If current price/ema9 are NaN (corrupted bar from yfinance), bail out gracefully
+    if current_price is None or current_ema9 is None:
+        return {
+            "ticker":  ticker,
+            "status":  "NO_DATA",
+            "error":   "Latest bar has NaN price/EMA9 (yfinance data corruption)",
+        }
+
+    # Round for display after the None-check
+    current_price = round(current_price, 2)
+    current_ema9  = round(current_ema9,  2)
+    current_sma50 = round(current_sma50, 2) if current_sma50 is not None else None
 
     above_sma50 = current_sma50 is not None and current_price > current_sma50
     target_3pct = round(current_price * 1.03, 2)
@@ -319,14 +420,21 @@ def _process_ticker_df(ticker: str, df: pd.DataFrame, max_candles_ago: int) -> D
     # ema9_dist_change_pct: how much the gap has widened/narrowed since the breakout day.
     # is_fresh_crossover: True when candles_ago <= 1 — i.e. breakout happened yesterday
     #   (confirmed today) or breakout happened today. This is the prime buy window.
-    breakout_close_val = float(breakout_candle["Close"])
-    breakout_ema9_val  = float(df["ema9"].iloc[breakout_idx])
-    initial_ema9_dist_pct = round(
-        (breakout_close_val - breakout_ema9_val) / breakout_ema9_val * 100, 2
-    ) if breakout_ema9_val > 0 else None
-    current_ema9_dist_pct_signed = round(
-        (current_price - current_ema9) / current_ema9 * 100, 2
-    ) if current_ema9 > 0 else None
+    #
+    # ALL math here uses _sf() so a corrupted bar (NaN) cannot leak into the JSON
+    # response and trigger "Out of range float values are not JSON compliant".
+    breakout_close_val = _sf(breakout_candle["Close"])
+    breakout_ema9_val  = _sf(df["ema9"].iloc[breakout_idx])
+    initial_ema9_dist_pct = (
+        round((breakout_close_val - breakout_ema9_val) / breakout_ema9_val * 100, 2)
+        if (breakout_close_val is not None and breakout_ema9_val is not None and breakout_ema9_val > 0)
+        else None
+    )
+    current_ema9_dist_pct_signed = (
+        round((current_price - current_ema9) / current_ema9 * 100, 2)
+        if (current_price is not None and current_ema9 is not None and current_ema9 > 0)
+        else None
+    )
     ema9_dist_change_pct = (
         round(current_ema9_dist_pct_signed - initial_ema9_dist_pct, 2)
         if (initial_ema9_dist_pct is not None and current_ema9_dist_pct_signed is not None)
@@ -339,18 +447,35 @@ def _process_ticker_df(ticker: str, df: pd.DataFrame, max_candles_ago: int) -> D
     candles = []
     for j in range(chart_start, n):
         row = df.iloc[j]
+        # Use _sf to NaN-proof every OHLC + EMA9 + SMA50 value in the candles array
+        o = _sf(row["Open"]);  h = _sf(row["High"]);  l = _sf(row["Low"]);  c = _sf(row["Close"])
+        e9 = _sf(df["ema9"].iloc[j]);  s50 = _sf(df["sma50"].iloc[j])
+        try:
+            vol = int(row["Volume"])
+        except (TypeError, ValueError):
+            vol = 0
         candles.append({
             "date":        str(df.index[j].date()) if hasattr(df.index[j], "date") else str(df.index[j])[:10],
-            "open":        round(float(row["Open"]),  2),
-            "high":        round(float(row["High"]),  2),
-            "low":         round(float(row["Low"]),   2),
-            "close":       round(float(row["Close"]), 2),
-            "volume":      int(row["Volume"]),
-            "ema9":        round(float(df["ema9"].iloc[j]),  2),
-            "sma50":       round(float(df["sma50"].iloc[j]), 2) if not pd.isna(df["sma50"].iloc[j]) else None,
+            "open":        round(o, 2) if o is not None else None,
+            "high":        round(h, 2) if h is not None else None,
+            "low":         round(l, 2) if l is not None else None,
+            "close":       round(c, 2) if c is not None else None,
+            "volume":      vol,
+            "ema9":        round(e9, 2) if e9 is not None else None,
+            "sma50":       round(s50, 2) if s50 is not None else None,
             "is_breakout": (_date(j) == bo_date),
             "is_confirm":  (_date(j) == con_date),
         })
+
+    # NaN-safe extraction of breakout/confirm candle values
+    bo_close = _sf(breakout_candle["Close"])
+    bo_high  = _sf(breakout_candle["High"])
+    cf_close = _sf(confirm_candle["Close"])
+    ema9_dist_pct_val = (
+        round(abs(current_price - current_ema9) / current_ema9 * 100, 2)
+        if (current_price is not None and current_ema9 is not None and current_ema9 > 0)
+        else None
+    )
 
     return {
         "ticker":                          ticker,
@@ -362,19 +487,19 @@ def _process_ticker_df(ticker: str, df: pd.DataFrame, max_candles_ago: int) -> D
         "ema9_value":                      current_ema9,
         "sma50_value":                     current_sma50,
         "above_sma50":                     above_sma50,
-        "ema9_dist_pct":                   round(abs(current_price - current_ema9) / current_ema9 * 100, 2),
+        "ema9_dist_pct":                   ema9_dist_pct_val,
         # ── New fields for fresh-crossover buy-opportunity detection ───────────────
-        "breakout_ema9":                   round(breakout_ema9_val, 2),
+        "breakout_ema9":                   round(breakout_ema9_val, 2) if breakout_ema9_val is not None else None,
         "initial_ema9_dist_pct":           initial_ema9_dist_pct,
         "current_ema9_dist_pct_signed":    current_ema9_dist_pct_signed,
         "ema9_dist_change_pct":            ema9_dist_change_pct,
         "is_fresh_crossover":              is_fresh_crossover,
         # ────────────────────────────────────────────────────────────────────────────
         "breakout_date":                   bo_date,
-        "breakout_close":                  round(float(breakout_candle["Close"]), 2),
-        "breakout_high":                   round(float(breakout_candle["High"]),  2),
+        "breakout_close":                  round(bo_close, 2) if bo_close is not None else None,
+        "breakout_high":                   round(bo_high,  2) if bo_high  is not None else None,
         "confirm_date":                    con_date,
-        "confirm_close":                   round(float(confirm_candle["Close"]), 2),
+        "confirm_close":                   round(cf_close, 2) if cf_close is not None else None,
         "candles_ago":                     candles_ago_val,
         "interval":                        "1d",
         "candles":                         candles,
@@ -842,7 +967,7 @@ async def ema9_backtest(req: Ema9BacktestRequest):
         f"UV trades={len(uv_trades)} | UV WR={uv_win_rate}%"
     )
 
-    return {
+    return _json_safe({
         "results":       results,
         "all_trades":    all_trades,
         "all_skipped":   all_skipped,
@@ -879,7 +1004,7 @@ async def ema9_backtest(req: Ema9BacktestRequest):
             "require_uptrend": req.require_uptrend,
             "fetch_fv":        req.fetch_fv,
         },
-    }
+    })
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1105,7 +1230,11 @@ async def _run_screen_pipeline(
     # The per-run logger below is intentionally disabled to avoid partial/duplicate rows.
     # asyncio.create_task(_log_signals_to_gsheet(signals, prime_targets))
 
-    return {
+    # Sanitize the WHOLE payload before returning — this is the data that
+    # chartink_watcher caches and serves via /api/chartink-screener/results.
+    # If even ONE NaN slips through here, that endpoint crashes with
+    # "ValueError: Out of range float values are not JSON compliant".
+    return _json_safe({
         "signals":             signals,
         "prime_targets":       prime_targets,
         "other_signals":       other_signals,
@@ -1118,7 +1247,7 @@ async def _run_screen_pipeline(
         "other_count":         len(other_signals),
         "undervalued_count":   len(prime_targets),
         "interval":            interval,
-    }
+    })
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1161,7 +1290,7 @@ def _parse_csv_tickers(content: bytes) -> Dict:
 async def ema9_tickers(q: str = "", source: str = "fno"):
     df = _load_all_df() if source == "all" else _load_fno_df()
     if df.empty:
-        return {"tickers": [], "total": 0}
+        return _json_safe({"tickers": [], "total": 0})
     q = q.strip().upper()
     if q:
         mask = df["symbol"].str.contains(q, na=False)
@@ -1170,19 +1299,19 @@ async def ema9_tickers(q: str = "", source: str = "fno"):
         filtered = df[mask].head(30)
     else:
         filtered = df.head(30)
-    return {
+    return _json_safe({
         "total": len(df),
         "tickers": [
             {"symbol": row["symbol"], "name": row["company_name"] or row["symbol"]}
             for _, row in filtered.iterrows()
         ],
-    }
+    })
 
 
 @router.get("/api/ema9/tickers/list")
 async def ema9_tickers_list(source: str = "fno"):
     df = _load_all_df() if source == "all" else _load_fno_df()
-    return {
+    return _json_safe({
         "source":  source,
         "total":   len(df),
         "symbols": df["symbol"].tolist(),
@@ -1190,18 +1319,19 @@ async def ema9_tickers_list(source: str = "fno"):
             {"symbol": row["symbol"], "name": row["company_name"] or row["symbol"]}
             for _, row in df.iterrows()
         ],
-    }
+    })
 
 
 @router.post("/api/ema9/screen")
 async def ema9_screen(req: Ema9ScreenRequest):
-    return await _run_screen_pipeline(
+    result = await _run_screen_pipeline(
         tickers=req.tickers,
         interval=req.interval,
         lookback_days=req.lookback_days,
         max_candles_ago=req.max_candles_ago,
         require_uptrend=req.require_uptrend,
     )
+    return _json_safe(result)
 
 
 @router.post("/api/ema9/upload-csv")
@@ -1234,7 +1364,7 @@ async def ema9_upload_csv(file: UploadFile = File(...)):
         "found_column":   csv_info["found_column"],
     }
 
-    return result
+    return _json_safe(result)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1295,7 +1425,7 @@ async def ema9_quick_scan(ticker: str):
     else:
         result["signal_type"] = result.get("status", "UNKNOWN")
 
-    return result
+    return _json_safe(result)
 
 
 @router.get("/api/ema9/fair-value/{ticker}")
@@ -1317,15 +1447,15 @@ async def ema9_fair_value(ticker: str):
     if fv.get("composite_fair_price") is None:
         error_msg = fv.get("fv_error", "UNKNOWN")
         logger.warning(f"[FV-OnDemand] {ticker}: No FV available. Error: {error_msg}")
-        return {
+        return _json_safe({
             "ticker":  ticker,
             "status":  "NO_FV",
             "fv_error": error_msg,
             **fv,
-        }
+        })
 
-    return {
+    return _json_safe({
         "ticker":  ticker,
         "status":  "OK",
         **fv, 
-    }
+    })
