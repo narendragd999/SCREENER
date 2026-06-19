@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 # ─────────────────────────────────────────────────────────────
@@ -310,6 +311,30 @@ def _process_ticker_df(ticker: str, df: pd.DataFrame, max_candles_ago: int) -> D
     target_from_entry = entry_price * 1.03
     target_nearing    = current_price >= target_from_entry * 0.995
 
+    # ─── 9EMA distance tracking (for fresh-crossover buy-opportunity detection) ───────
+    # initial_ema9_dist_pct: how far ABOVE the 9EMA the price closed on the BREAKOUT
+    #   candle (the day of the crossover). Small + positive = clean breakout.
+    # current_ema9_dist_pct_signed: same metric but for TODAY's price vs TODAY's 9EMA.
+    #   Negative = price has fallen back below 9EMA (signal invalid).
+    # ema9_dist_change_pct: how much the gap has widened/narrowed since the breakout day.
+    # is_fresh_crossover: True when candles_ago <= 1 — i.e. breakout happened yesterday
+    #   (confirmed today) or breakout happened today. This is the prime buy window.
+    breakout_close_val = float(breakout_candle["Close"])
+    breakout_ema9_val  = float(df["ema9"].iloc[breakout_idx])
+    initial_ema9_dist_pct = round(
+        (breakout_close_val - breakout_ema9_val) / breakout_ema9_val * 100, 2
+    ) if breakout_ema9_val > 0 else None
+    current_ema9_dist_pct_signed = round(
+        (current_price - current_ema9) / current_ema9 * 100, 2
+    ) if current_ema9 > 0 else None
+    ema9_dist_change_pct = (
+        round(current_ema9_dist_pct_signed - initial_ema9_dist_pct, 2)
+        if (initial_ema9_dist_pct is not None and current_ema9_dist_pct_signed is not None)
+        else None
+    )
+    candles_ago_val = n - 1 - confirm_idx
+    is_fresh_crossover = (candles_ago_val <= 1)
+
     chart_start = max(0, n - 60)
     candles = []
     for j in range(chart_start, n):
@@ -328,24 +353,31 @@ def _process_ticker_df(ticker: str, df: pd.DataFrame, max_candles_ago: int) -> D
         })
 
     return {
-        "ticker":          ticker,
-        "status":          "SIGNAL",
-        "current_price":   current_price,
-        "target_3pct":     target_3pct,
-        "target_nearing":  target_nearing,
-        "ema9":            current_ema9,
-        "ema9_value":      current_ema9,
-        "sma50_value":     current_sma50,
-        "above_sma50":     above_sma50,
-        "ema9_dist_pct":   round(abs(current_price - current_ema9) / current_ema9 * 100, 2),
-        "breakout_date":   bo_date,
-        "breakout_close":  round(float(breakout_candle["Close"]), 2),
-        "breakout_high":   round(float(breakout_candle["High"]),  2),
-        "confirm_date":    con_date,
-        "confirm_close":   round(float(confirm_candle["Close"]), 2),
-        "candles_ago":     n - 1 - confirm_idx,
-        "interval":        "1d",
-        "candles":         candles,
+        "ticker":                          ticker,
+        "status":                          "SIGNAL",
+        "current_price":                   current_price,
+        "target_3pct":                     target_3pct,
+        "target_nearing":                  target_nearing,
+        "ema9":                            current_ema9,
+        "ema9_value":                      current_ema9,
+        "sma50_value":                     current_sma50,
+        "above_sma50":                     above_sma50,
+        "ema9_dist_pct":                   round(abs(current_price - current_ema9) / current_ema9 * 100, 2),
+        # ── New fields for fresh-crossover buy-opportunity detection ───────────────
+        "breakout_ema9":                   round(breakout_ema9_val, 2),
+        "initial_ema9_dist_pct":           initial_ema9_dist_pct,
+        "current_ema9_dist_pct_signed":    current_ema9_dist_pct_signed,
+        "ema9_dist_change_pct":            ema9_dist_change_pct,
+        "is_fresh_crossover":              is_fresh_crossover,
+        # ────────────────────────────────────────────────────────────────────────────
+        "breakout_date":                   bo_date,
+        "breakout_close":                  round(float(breakout_candle["Close"]), 2),
+        "breakout_high":                   round(float(breakout_candle["High"]),  2),
+        "confirm_date":                    con_date,
+        "confirm_close":                   round(float(confirm_candle["Close"]), 2),
+        "candles_ago":                     candles_ago_val,
+        "interval":                        "1d",
+        "candles":                         candles,
         **trend_data,
     }
 
@@ -1203,6 +1235,36 @@ async def ema9_upload_csv(file: UploadFile = File(...)):
     }
 
     return result
+
+
+# ─────────────────────────────────────────────────────────────
+#  SAMPLE CSV DOWNLOAD
+#  Serves a small reference CSV so users can see the expected
+#  column format (Symbol / Company Name) before uploading their
+#  own screener export.
+# ─────────────────────────────────────────────────────────────
+import pathlib as _pathlib
+
+_SAMPLE_CSV_PATHS = [
+    _pathlib.Path(__file__).parent / "sample_tickers.csv",          # same dir as router
+    _pathlib.Path.cwd() / "sample_tickers.csv",                      # project root
+    _pathlib.Path.cwd() / "download" / "sample_tickers.csv",         # download/ subdir
+    _pathlib.Path("/home/z/my-project/download/sample_tickers.csv"), # absolute fallback
+]
+
+
+@router.get("/sample_tickers.csv")
+async def download_sample_csv():
+    """Download a sample CSV showing the expected ticker-list format."""
+    for p in _SAMPLE_CSV_PATHS:
+        if p.exists() and p.is_file():
+            return FileResponse(
+                path=str(p),
+                media_type="text/csv",
+                filename="sample_tickers.csv",
+                headers={"Content-Disposition": 'attachment; filename="sample_tickers.csv"'},
+            )
+    raise HTTPException(404, "sample_tickers.csv not found on server")
 
 
 @router.get("/api/ema9/quick-scan/{ticker}")

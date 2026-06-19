@@ -1,11 +1,14 @@
 [
   {
+<<<<<<< HEAD
     "time": "2026-05-04 16:19:42",
     "tickers_scanned": 1,
     "signals_found": 1,
     "nse_calls": 2
   },
   {
+=======
+>>>>>>> 77d6a8633b08cb3160c53c62d274db233117ee74
     "time": "2026-05-08 08:52:29",
     "tickers_scanned": 201,
     "signals_found": 31,
@@ -570,12 +573,29 @@
     "nse_calls": 180
   },
   {
+<<<<<<< HEAD
     "time": "2026-06-17 12:28:00",
+=======
+    "time": "2026-06-18 10:28:48",
+    "tickers_scanned": 205,
+    "signals_found": 68,
+    "nse_calls": 178
+  },
+  {
+    "time": "2026-06-18 11:02:23",
+    "tickers_scanned": 205,
+    "signals_found": 65,
+    "nse_calls": 172
+  },
+  {
+    "time": "2026-06-18 11:33:07",
+>>>>>>> 77d6a8633b08cb3160c53c62d274db233117ee74
     "tickers_scanned": 205,
     "signals_found": 71,
     "nse_calls": 176
   },
   {
+<<<<<<< HEAD
     "time": "2026-06-17 13:19:02",
     "tickers_scanned": 205,
     "signals_found": 72,
@@ -598,5 +618,23 @@
     "tickers_scanned": 205,
     "signals_found": 71,
     "nse_calls": 178
+=======
+    "time": "2026-06-18 13:00:34",
+    "tickers_scanned": 205,
+    "signals_found": 54,
+    "nse_calls": 148
+  },
+  {
+    "time": "2026-06-18 14:35:51",
+    "tickers_scanned": 205,
+    "signals_found": 69,
+    "nse_calls": 178
+  },
+  {
+    "time": "2026-06-18 15:07:41",
+    "tickers_scanned": 205,
+    "signals_found": 71,
+    "nse_calls": 176
+>>>>>>> 77d6a8633b08cb3160c53c62d274db233117ee74
   }
 ]

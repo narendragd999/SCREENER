@@ -1,0 +1,4 @@
+{
+  "ema9_5min_breakout": "( {33489} ( [0] 5 minute close > [0] 5 minute ema( close,9 ) and [ -1 ] 5 minute close <= [ -1 ] 5 minute ema( close,9 ) ) )",
+  "ema9_daily_signal": "( {33489} (  daily ^2349('output'='signal')^ >  daily ema(  daily close , 9 ) and  1 day ago  ^2349('output'='signal')^ <=  1 day ago  ema(  daily close , 9 ) ) )"
+}

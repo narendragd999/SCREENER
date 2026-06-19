@@ -1,0 +1,99 @@
+# ─────────────────────────────────────────────
+#  NSE Momentum Screener — .gitignore
+# ─────────────────────────────────────────────
+
+# ── Runtime data files (generated at runtime, never commit) ──
+signals.json
+proximity_alerts.json
+scan_log.json
+strike_tracker.json
+premium_zone.json
+config.json          # user-tuned config; commit config.example.json instead
+
+# ── Ticker list (may contain proprietary universe) ──
+# Remove this line if you want tickers.csv tracked
+tickers.csv
+
+# ── Backtest output cache ──
+backtest_*.json
+indexes/
+storage/
+backtest_cache/
+data/
+
+# ── Python ──
+__pycache__/
+__pycache__
+__pycache__
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# ── Virtual environments ──
+.venv/
+venv/
+env/
+ENV/
+.env/
+
+# ── Environment / secrets ──
+.env
+.env.*
+!.env.example
+*.env
+
+# ── Dependency locks (keep one, ignore the other per your toolchain) ──
+# pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ── Build / dist ──
+build/
+dist/
+*.egg-info/
+*.egg
+MANIFEST
+
+# ── pytest / coverage ──
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.coveragerc
+
+# ── Jupyter ──
+.ipynb_checkpoints/
+*.ipynb
+
+# ── Logs ──
+*.log
+logs/
+
+# ── OS artefacts ──
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDEs ──
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# ── Type-checking / linting caches ──
+.mypy_cache/
+.ruff_cache/
+.pytype/
+
+# ── uvicorn / gunicorn ──
+*.pid
+gunicorn.conf.py
+
+# ── NSE session / cookie dumps (if ever written to disk) ──
+nse_cookies.pkl
+session_*.pkl
+run_screener.bat

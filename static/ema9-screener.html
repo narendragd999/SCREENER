@@ -76,6 +76,22 @@ tailwind.config = {
     background: rgba(0,229,160,0.06) !important;
   }
 
+  /* ★ FRESH crossover row tint — breakout happened yesterday's daily close,
+     confirmed today. This is the prime buy-window signal. */
+  .signal-row.fresh-crossover-row {
+    background: linear-gradient(90deg,
+      rgba(16,185,129,0.10) 0%,
+      rgba(16,185,129,0.04) 60%,
+      transparent 100%);
+    box-shadow: inset 3px 0 0 0 #10b981;
+  }
+  .signal-row.fresh-crossover-row:hover {
+    background: linear-gradient(90deg,
+      rgba(16,185,129,0.18) 0%,
+      rgba(16,185,129,0.08) 60%,
+      rgba(0,229,160,0.06) 100%) !important;
+  }
+
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: #0a1628; }
   ::-webkit-scrollbar-thumb { background: #1a2d4a; border-radius: 3px; }
@@ -330,6 +346,10 @@ tailwind.config = {
           class="tab-btn px-4 py-1.5 rounded-md font-ui text-xs font-600 transition-all duration-200">
           📡 Chartink
         </button>
+        <button id="tabClauseScan" onclick="switchTab('clausescan')"
+          class="tab-btn px-4 py-1.5 rounded-md font-ui text-xs font-600 transition-all duration-200">
+          🔍 Clause Scan
+        </button>
       </div>
       <span id="clock"></span>
     </div>
@@ -380,12 +400,53 @@ tailwind.config = {
 
   <!-- ═══════════════ CSV UPLOAD ═══════════════ -->
   <section class="glass-card rounded-2xl p-6">
-    <div class="flex items-center gap-2 mb-4">
+    <div class="flex items-center gap-2 mb-4 flex-wrap">
       <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
       </svg>
       <h2 class="font-ui text-lg font-700 text-white">Upload CSV</h2>
       <span class="text-xs font-mono text-slate-500 ml-2">Third-party screener exports supported</span>
+      <a href="/sample_tickers.csv" download
+         class="ml-auto flex items-center gap-1.5 text-xs font-mono text-accent2 hover:text-accent transition-colors
+                border border-accent2/30 hover:border-accent/50 rounded-lg px-2.5 py-1 bg-accent2/5 hover:bg-accent/10"
+         title="Download a sample CSV in the correct format">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+        </svg>
+        Download Sample CSV
+      </a>
+    </div>
+
+    <!-- ═══════ Manual Ticker Input ═══════ -->
+    <div class="bg-card2/40 rounded-xl p-5 mb-5 border border-border/40">
+      <div class="flex items-center gap-2 mb-3 flex-wrap">
+        <svg class="w-4 h-4 text-accent2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        <h3 class="font-ui text-sm font-600 text-white">Manual Ticker Entry</h3>
+        <span class="text-xs font-mono text-slate-500">Paste tickers — comma, space, or newline separated</span>
+      </div>
+      <textarea id="manualTickersInput" rows="3"
+        placeholder="e.g.  RELIANCE, TCS, INFY, HDFCBANK, GODFRYPHLP, JSWENERGY&#10;  — or paste a column of tickers from any screener —"
+        class="w-full bg-card border border-border/50 rounded-lg px-3 py-2.5 font-mono text-sm text-slate-200
+               placeholder:text-slate-600 placeholder:font-ui placeholder:text-xs
+               focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20
+               resize-y min-h-[80px]"></textarea>
+      <div class="flex items-center gap-3 mt-3 flex-wrap">
+        <button id="manualScreenBtn"
+          class="px-5 py-2 rounded-lg font-ui font-600 text-sm
+                 bg-gradient-to-r from-accent2 to-accent text-base
+                 hover:shadow-lg hover:shadow-accent2/20 transition-all duration-200
+                 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span id="manualScreenBtnText">Screen Tickers</span>
+          <span id="manualScreenBtnSpinner" class="spinner-sm hidden"></span>
+        </button>
+        <span id="manualStatusText" class="font-mono text-xs text-slate-500"></span>
+        <button id="clearManualBtn" class="ml-auto text-xs text-slate-500 hover:text-danger transition-colors">Clear</button>
+      </div>
     </div>
 
     <div id="dropZone" class="upload-zone rounded-xl p-8 text-center">
@@ -607,6 +668,17 @@ tailwind.config = {
         </button>
       </div>
     </div>
+    <div class="mt-4 flex items-center gap-2 flex-wrap" id="chartinkClauseSelectorRow">
+      <span class="font-mono text-xs text-slate-500 shrink-0">Active clause(s):</span>
+      <div id="chartinkClauseCheckboxes" class="flex items-center gap-2 flex-wrap"></div>
+      <button onclick="ckLoadClauseOptions()"
+        class="font-mono text-xs text-accent2 hover:underline ml-1" title="Refresh from Clause Scan tab">
+        refresh
+      </button>
+      <span id="chartinkClauseSelectorEmpty" class="hidden font-mono text-xs text-slate-600">
+        No saved clauses yet &mdash; add some in the Clause Scan tab.
+      </span>
+    </div>
     <div class="mt-3 flex items-center gap-2 text-xs font-mono text-slate-600">
       <span>Last scan:</span>
       <span id="chartinkLastRun">never</span>
@@ -623,7 +695,11 @@ tailwind.config = {
 
   <!-- ═══════════════ SUMMARY STATS ═══════════════ -->
   <section id="chartinkSummarySection" class="hidden">
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <div class="glass-card rounded-xl p-4 text-center" style="background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(16,185,129,.04));border:1px solid rgba(16,185,129,.35);box-shadow:0 0 18px rgba(16,185,129,.18);">
+        <p class="font-mono text-2xl font-700 text-emerald-400" id="chartinkStatFresh">0</p>
+        <p class="font-ui text-xs text-emerald-400/80 mt-1">★ FRESH CROSSOVERS<br><span class="text-[10px] text-slate-500">(Today/Yesterday)</span></p>
+      </div>
       <div class="glass-card rounded-xl p-4 text-center">
         <p class="font-mono text-2xl font-700 text-white" id="chartinkStatTotal">0</p>
         <p class="font-ui text-xs text-slate-500 mt-1">Stored Signals</p>
@@ -659,6 +735,8 @@ tailwind.config = {
           <select id="chartinkPrimeSortSelect" onchange="sortChartinkTable('prime')"
             class="bg-card2 border border-border/50 rounded-lg px-3 py-1 font-mono text-xs text-slate-300
                    focus:outline-none focus:border-accent/50">
+            <option value="fresh_first">★ Fresh Crossovers First (Today/Yesterday)</option>
+            <option value="initial_ema9_asc">Cleanest Crossover ↑ (Smallest BO Gap)</option>
             <option value="gap_desc">Gap to FV ↓ (Most Undervalued)</option>
             <option value="gap_asc">Gap to FV ↑ (Least Undervalued)</option>
             <option value="candles_asc">Freshness ↑ (Newest Signal)</option>
@@ -676,6 +754,8 @@ tailwind.config = {
               <th class="px-4 py-3">Price</th>
               <th class="px-4 py-3">3% Target</th>
               <th class="px-4 py-3">EMA 9</th>
+              <th class="px-4 py-3">BO EMA9 Gap%</th>
+              <th class="px-4 py-3">Curr EMA9 Gap%</th>
               <th class="px-4 py-3">SMA 50</th>
               <th class="px-4 py-3">Fair Value</th>
               <th class="px-4 py-3">Gap to FV</th>
@@ -704,6 +784,8 @@ tailwind.config = {
           <select id="chartinkOtherSortSelect" onchange="sortChartinkTable('other')"
             class="bg-card2 border border-border/50 rounded-lg px-3 py-1 font-mono text-xs text-slate-300
                    focus:outline-none focus:border-warn/50">
+            <option value="fresh_first">★ Fresh Crossovers First (Today/Yesterday)</option>
+            <option value="initial_ema9_asc">Cleanest Crossover ↑ (Smallest BO Gap)</option>
             <option value="candles_asc">Freshness ↑ (Newest Signal)</option>
             <option value="candles_desc">Freshness ↓ (Oldest Signal)</option>
             <option value="gap_asc">Gap to FV ↑ (Closest to FV)</option>
@@ -721,6 +803,8 @@ tailwind.config = {
               <th class="px-4 py-3">Price</th>
               <th class="px-4 py-3">3% Target</th>
               <th class="px-4 py-3">EMA 9</th>
+              <th class="px-4 py-3">BO EMA9 Gap%</th>
+              <th class="px-4 py-3">Curr EMA9 Gap%</th>
               <th class="px-4 py-3">SMA 50</th>
               <th class="px-4 py-3">Fair Value</th>
               <th class="px-4 py-3">Gap to FV</th>
@@ -767,6 +851,109 @@ tailwind.config = {
   </section>
 
 </div><!-- /chartinkPanel -->
+
+<!-- ═══════════════ MULTI-CLAUSE SCANNER PANEL ═══════════════ -->
+<div id="clauseScanPanel" class="hidden space-y-8">
+
+  <!-- ═══════════════ CONTROL BAR ═══════════════ -->
+  <section class="glass-card rounded-2xl p-6">
+    <div class="flex items-center justify-between flex-wrap gap-4">
+      <div class="flex items-center gap-2">
+        <svg class="w-5 h-5 text-accent2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/>
+        </svg>
+        <h2 class="font-ui text-lg font-700 text-white">Multi-Clause Scanner</h2>
+        <span id="csClauseCount" class="font-mono text-xs bg-accent2/10 text-accent2 px-2 py-0.5 rounded-full ml-1">0 saved</span>
+        <span class="text-xs font-mono text-slate-500 ml-2">Save Chartink scan clauses by name &bull; run any combination on demand</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="csStatusText" class="font-mono text-xs text-slate-500"></span>
+        <button id="csNewClauseBtn" onclick="csOpenAddForm()"
+          class="px-4 py-2 rounded-lg font-ui font-600 text-xs
+                 bg-card2 border border-border/50 text-accent2
+                 hover:border-accent2/50 transition-all duration-200">
+          + New Clause
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ ADD / EDIT CLAUSE FORM ═══════════════ -->
+  <section id="csFormSection" class="hidden glass-card rounded-2xl p-6">
+    <h3 id="csFormTitle" class="font-ui text-sm font-700 text-white mb-4">Add New Clause</h3>
+    <div class="space-y-3">
+      <div>
+        <label class="font-ui text-xs text-slate-500 block mb-1">Clause Name</label>
+        <input id="csClauseNameInput" type="text" placeholder="e.g. ema9_15min_breakout"
+          class="w-full bg-card2 border border-border/50 rounded-lg px-3 py-2 font-mono text-sm text-slate-200
+                 focus:outline-none focus:border-accent2/50">
+      </div>
+      <div>
+        <label class="font-ui text-xs text-slate-500 block mb-1">Scan Clause (Chartink syntax)</label>
+        <textarea id="csClauseTextInput" rows="3" placeholder="( {33489} ( [0] 5 minute close > [0] 5 minute ema( close,9 ) and [ -1 ] 5 minute close <= [ -1 ] 5 minute ema( close,9 ) ) )"
+          class="w-full bg-card2 border border-border/50 rounded-lg px-3 py-2 font-mono text-xs text-slate-200
+                 focus:outline-none focus:border-accent2/50"></textarea>
+      </div>
+      <p id="csFormError" class="hidden text-xs font-mono text-danger"></p>
+      <div class="flex items-center gap-3">
+        <button id="csSaveClauseBtn" onclick="csSaveClause()"
+          class="px-4 py-2 rounded-lg font-ui font-600 text-xs
+                 bg-gradient-to-r from-accent2 to-accent text-base
+                 hover:shadow-lg hover:shadow-accent2/20 transition-all duration-200">
+          Save Clause
+        </button>
+        <button onclick="csCancelForm()"
+          class="px-4 py-2 rounded-lg font-ui font-600 text-xs
+                 bg-card2 border border-border/50 text-slate-400
+                 hover:text-slate-200 transition-all duration-200">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SAVED CLAUSES LIST ═══════════════ -->
+  <section class="glass-card rounded-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3 flex-wrap">
+      <span class="text-lg">📋</span>
+      <h2 class="font-ui text-lg font-700 text-white">Saved Clauses</h2>
+      <label class="flex items-center gap-2 ml-2 cursor-pointer">
+        <input type="checkbox" id="csSelectAllCheckbox" onchange="csToggleSelectAll(this.checked)" class="accent-accent2">
+        <span class="font-mono text-xs text-slate-500">Select All</span>
+      </label>
+      <div class="ml-auto">
+        <button id="csRunSelectedBtn" onclick="csRunSelected()"
+          class="px-4 py-2 rounded-lg font-ui font-600 text-xs
+                 bg-gradient-to-r from-accent2 to-accent text-base
+                 hover:shadow-lg hover:shadow-accent2/20 transition-all duration-200
+                 flex items-center gap-2 whitespace-nowrap">
+          <span id="csRunSelectedText">Run Selected</span>
+          <span id="csRunSelectedSpinner" class="spinner-sm hidden"></span>
+        </button>
+      </div>
+    </div>
+    <div id="csClauseListBody" class="divide-y divide-border/30"></div>
+    <div id="csClauseListEmpty" class="hidden px-6 py-10 text-center">
+      <p class="font-ui text-slate-500 text-sm">No saved clauses yet. Click <span class="text-accent2">+ New Clause</span> to add one.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SCAN RESULTS ═══════════════ -->
+  <section id="csResultsSection" class="hidden">
+    <div class="glass-card rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-border/50 flex items-center gap-3">
+        <span class="text-lg">🎯</span>
+        <h2 class="font-ui text-lg font-700 text-white">Scan Results</h2>
+      </div>
+      <div id="csResultsGrid" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </div>
+  </section>
+
+  <section id="csResultsEmpty" class="glass-card rounded-2xl p-10 text-center">
+    <p class="font-ui text-slate-500 text-sm">Select one or more clauses above and click <span class="text-accent2">Run Selected</span> to scan.</p>
+  </section>
+
+</div><!-- /clauseScanPanel -->
 
 <!-- ═══════════════ BACKTEST PANEL ═══════════════ -->
 <div id="backtestPanel" class="hidden space-y-8">
@@ -1127,12 +1314,22 @@ function storeSignal(sig) {
 function _sortSignalArray(arr, sortKey) {
   return [...arr].sort((a, b) => {
     switch (sortKey) {
-      case 'gap_desc':  return (b.gap_to_fair_pct ?? -999) - (a.gap_to_fair_pct ?? -999);
-      case 'gap_asc':   return (a.gap_to_fair_pct ?? 999)  - (b.gap_to_fair_pct ?? 999);
-      case 'candles_asc':  return (a.candles_ago ?? 999) - (b.candles_ago ?? 999);
-      case 'candles_desc': return (b.candles_ago ?? 0)   - (a.candles_ago ?? 0);
-      case 'price_desc': return (b.current_price ?? 0) - (a.current_price ?? 0);
-      case 'price_asc':  return (a.current_price ?? 0) - (b.current_price ?? 0);
+      case 'gap_desc':            return (b.gap_to_fair_pct ?? -999) - (a.gap_to_fair_pct ?? -999);
+      case 'gap_asc':             return (a.gap_to_fair_pct ?? 999)  - (b.gap_to_fair_pct ?? 999);
+      case 'candles_asc':         return (a.candles_ago ?? 999) - (b.candles_ago ?? 999);
+      case 'candles_desc':        return (b.candles_ago ?? 0)   - (a.candles_ago ?? 0);
+      case 'price_desc':          return (b.current_price ?? 0) - (a.current_price ?? 0);
+      case 'price_asc':           return (a.current_price ?? 0) - (b.current_price ?? 0);
+      // ── New 9EMA-distance sorts ──────────────────────────────────────
+      case 'fresh_first':         // Fresh crossovers first (candles_ago ≤ 1), then by candles_ago asc
+        const aFresh = (a.is_fresh_crossover === true) ? 0 : 1;
+        const bFresh = (b.is_fresh_crossover === true) ? 0 : 1;
+        if (aFresh !== bFresh) return aFresh - bFresh;
+        return (a.candles_ago ?? 999) - (b.candles_ago ?? 999);
+      case 'initial_ema9_asc':   // Smallest initial gap first = cleanest crossover
+        return Math.abs(a.initial_ema9_dist_pct ?? 999) - Math.abs(b.initial_ema9_dist_pct ?? 999);
+      case 'initial_ema9_desc':  // Largest initial gap first = most extended
+        return Math.abs(b.initial_ema9_dist_pct ?? 0)   - Math.abs(a.initial_ema9_dist_pct ?? 0);
       default: return 0;
     }
   });
@@ -1538,6 +1735,128 @@ function setCsvStatus(msg, type='info') {
 
 
 // ═══════════════════════════════════════════════════════════
+//  MANUAL TICKER ENTRY (textarea → /api/ema9/screen)
+// ═══════════════════════════════════════════════════════════
+
+const manualTickersInput = document.getElementById('manualTickersInput');
+const manualScreenBtn    = document.getElementById('manualScreenBtn');
+const clearManualBtn     = document.getElementById('clearManualBtn');
+
+/**
+ * Parse free-form ticker input. Accepts:
+ *   - Comma-separated:    "RELIANCE, TCS, INFY"
+ *   - Space-separated:    "RELIANCE TCS INFY"
+ *   - Newline-separated:  one ticker per line (pasted from Excel/screener)
+ *   - Tab-separated:      pasted from Excel columns
+ *   - Mixed:              "RELIANCE, TCS\nINFY  HDFCBANK"
+ * Also strips:
+ *   - .NS / .BO suffixes  (RELIANCE.NS → RELIANCE)
+ *   - Surrounding quotes  ("RELIANCE" → RELIANCE)
+ *   - Whitespace
+ *   - Empty entries
+ *   - Duplicates (preserves first-seen order)
+ *
+ * @param {string} raw - The raw textarea content
+ * @returns {string[]} - Cleaned, deduped, uppercase ticker list
+ */
+function parseManualTickers(raw) {
+  if (!raw || typeof raw !== 'string') return [];
+  return [
+    ...new Set(
+      raw
+        .split(/[\s,;\t\n\r]+/)            // split on any separator
+        .map(t => t.trim().toUpperCase())
+        .map(t => t.replace(/^["']+|["']+$/g, ''))  // strip quotes
+        .map(t => t.replace(/\.(NS|BO)$/i, ''))      // strip .NS / .BO
+        .filter(t => t.length > 0 && /^[A-Z0-9\-]+$/.test(t))  // sanity: alnum + hyphen
+    )
+  ];
+}
+
+// Live preview: as user types, show count of parsed tickers
+manualTickersInput.addEventListener('input', () => {
+  const tickers = parseManualTickers(manualTickersInput.value);
+  const statusEl = document.getElementById('manualStatusText');
+  if (tickers.length === 0) {
+    statusEl.textContent = '';
+    manualScreenBtn.disabled = true;
+  } else {
+    statusEl.textContent = `${tickers.length} ticker${tickers.length === 1 ? '' : 's'} ready`;
+    statusEl.className = 'font-mono text-xs text-accent2';
+    manualScreenBtn.disabled = false;
+  }
+});
+
+// Enter key (Ctrl+Enter or Cmd+Enter) triggers screen
+manualTickersInput.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    if (!manualScreenBtn.disabled) runManualScreen();
+  }
+});
+
+clearManualBtn.addEventListener('click', () => {
+  manualTickersInput.value = '';
+  document.getElementById('manualStatusText').textContent = '';
+  manualScreenBtn.disabled = true;
+  manualTickersInput.focus();
+});
+
+manualScreenBtn.addEventListener('click', runManualScreen);
+
+async function runManualScreen() {
+  const tickers = parseManualTickers(manualTickersInput.value);
+  if (tickers.length === 0) {
+    setManualStatus('Enter at least one ticker first', 'danger');
+    return;
+  }
+
+  const btn     = manualScreenBtn;
+  const txt     = document.getElementById('manualScreenBtnText');
+  const spinner = document.getElementById('manualScreenBtnSpinner');
+
+  btn.disabled = true;
+  txt.textContent = 'Screening...';
+  spinner.classList.remove('hidden');
+  setManualStatus(`Screening ${tickers.length} ticker${tickers.length === 1 ? '' : 's'}...`);
+
+  try {
+    const resp = await fetch('/api/ema9/screen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tickers:         tickers,
+        interval:        '1d',
+        lookback_days:   180,
+        max_candles_ago: 10,
+        require_uptrend: true,
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    lastResults = data;
+    renderResults(data);
+    setManualStatus(`Done — ${data.count} signals found`, 'success');
+  } catch (err) {
+    setManualStatus('Error: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = false;
+    txt.textContent = 'Screen Tickers';
+    spinner.classList.add('hidden');
+  }
+}
+
+function setManualStatus(msg, type='info') {
+  const el = document.getElementById('manualStatusText');
+  el.textContent = msg;
+  el.className = 'font-mono text-xs ' + ({ info:'text-slate-500', danger:'text-danger', success:'text-accent' }[type] || 'text-slate-500');
+}
+
+
+// ═══════════════════════════════════════════════════════════
 //  RENDER BATCH RESULTS
 // ═══════════════════════════════════════════════════════════
 
@@ -1644,12 +1963,62 @@ function buildRow(s, isPrime) {
     : '<span class="badge-fresh font-mono text-xs px-2 py-0.5 rounded-full">FRESH</span>';
   const targetClass = isPrime ? 'glow-target font-mono font-600' : 'font-mono text-slate-300';
 
+  // ─── 9EMA distance cells (new) ────────────────────────────────────
+  // BO EMA9 Gap% : distance from 9EMA on the BREAKOUT day (crossover day).
+  //   Small + positive (0% to +2%) = clean crossover → tighter stop, better R:R.
+  //   Large positive (>+3%) = price already extended → risky chase entry.
+  //   Null = data not available.
+  //
+  // Curr EMA9 Gap% : signed distance from 9EMA RIGHT NOW (live).
+  //   Positive = price still above 9EMA (signal intact).
+  //   Negative = price has fallen back below 9EMA (signal invalid — avoid).
+  const boGap     = s.initial_ema9_dist_pct;
+  const currGap   = s.current_ema9_dist_pct_signed;
+
+  function _ema9GapCell(val, isInitial) {
+    if (val == null) return `<td class="px-4 py-3 font-mono text-slate-600">—</td>`;
+    const sign    = val >= 0 ? '+' : '';
+    const absVal  = Math.abs(val);
+    let cls;
+    if (isInitial) {
+      // Initial gap: smaller is better (cleaner crossover)
+      if (absVal <= 1.0)      cls = 'text-emerald-400 font-600';   // ★ Cleanest
+      else if (absVal <= 2.0) cls = 'text-accent';                 // ✓ Good
+      else if (absVal <= 3.5) cls = 'text-warn';                   // ⚠ Extended
+      else                    cls = 'text-danger';                 // ✗ Too stretched
+    } else {
+      // Current gap: must stay positive (signal alive)
+      if (val < 0)             cls = 'text-danger line-through';   // Invalid
+      else if (absVal <= 1.0)  cls = 'text-emerald-400';
+      else if (absVal <= 3.0)  cls = 'text-accent';
+      else                     cls = 'text-warn';
+    }
+    return `<td class="px-4 py-3 font-mono ${cls}" title="${isInitial ? 'Distance from 9EMA on breakout day' : 'Live signed distance from 9EMA (negative = invalid)'}">${sign}${val.toFixed(2)}%</td>`;
+  }
+  const boGapCell   = _ema9GapCell(boGap,   true);
+  const currGapCell = _ema9GapCell(currGap, false);
+
+  // ─── FRESH crossover badge + row tint ─────────────────────────────
+  // is_fresh_crossover = True when candles_ago <= 1 (breakout happened
+  // yesterday's daily close, confirmed today). This is the prime buy window.
+  const isFresh = s.is_fresh_crossover === true;
+  const freshBadge = isFresh
+    ? `<span style="display:inline-block;margin-left:6px;font-size:9px;font-weight:700;
+            letter-spacing:.05em;background:rgba(16,185,129,.22);color:#10b981;
+            border:1px solid rgba(16,185,129,.55);border-radius:4px;
+            padding:1px 5px;vertical-align:middle;line-height:1.5;
+            box-shadow:0 0 8px rgba(16,185,129,.35);">★ FRESH</span>`
+    : '';
+  const rowTintCls = isFresh ? 'fresh-crossover-row' : '';
+
   return `
-    <tr class="signal-row border-b border-border/20" data-ticker="${s.ticker}" onclick='openChartForTicker("${s.ticker}")'>
-      <td class="px-4 py-3 font-ui font-700 text-white">${s.ticker}</td>
+    <tr class="signal-row border-b border-border/20 ${rowTintCls}" data-ticker="${s.ticker}" onclick='openChartForTicker("${s.ticker}")'>
+      <td class="px-4 py-3 font-ui font-700 text-white">${s.ticker}${freshBadge}</td>
       <td class="px-4 py-3 font-mono text-slate-300">₹${fmtNum(s.current_price)}</td>
       <td class="px-4 py-3 ${targetClass}">₹${fmtNum(s.target_3pct)}</td>
       <td class="px-4 py-3 font-mono text-accent2">₹${fmtNum(s.ema9_value)}</td>
+      ${boGapCell}
+      ${currGapCell}
       <td class="px-4 py-3 font-mono text-warn">₹${fmtNum(s.sma50_value)}</td>
       <td class="px-4 py-3 fv-cell">${fvCellHTML} ${fvFetchHTML}</td>
       <td class="px-4 py-3 fv-gap-cell font-mono ${gapFvClass}">${gapFvStr}</td>
@@ -1688,8 +2057,73 @@ function toggleFailed() {
 // ═══════════════════════════════════════════════════════════
 
 function openChartForTicker(ticker) {
-  const sig = _allSignals[ticker];
-  if (sig) openChart(sig);
+  // 1) Try the in-memory manual-screener store first (populated by renderResults)
+  let sig = _allSignals[ticker];
+
+  // 2) Fall back to the Chartink live-feed store in localStorage.
+  //    Without this fallback, clicking a row in the Chartink tab does nothing
+  //    because those signals never get added to _allSignals on a fresh page load.
+  if (!sig) {
+    try {
+      const ckStore = _ckLoadStore();
+      if (ckStore && ckStore[ticker]) {
+        sig = ckStore[ticker];
+        // Also warm _allSignals so future clicks skip the localStorage lookup
+        _allSignals[ticker] = sig;
+      }
+    } catch (e) {
+      console.warn('[openChartForTicker] Failed to read chartink store for', ticker, e);
+    }
+  }
+
+  if (sig) {
+    // If the candle array is missing (e.g. localStorage quota stripped it,
+    // or signal came from a path that didn't include candles), fetch it
+    // on-demand from the quick-scan endpoint so the chart still renders.
+    if (!sig.candles || !sig.candles.length) {
+      console.info('[openChartForTicker] No candles cached for', ticker, '— fetching via quick-scan…');
+      if (typeof setChartinkStatus === 'function') {
+        setChartinkStatus(`Loading chart for ${ticker}…`, 'info');
+      }
+      openChart(sig); // open modal immediately with the metadata we have
+      _fetchCandlesAndRenderChart(ticker);
+      return;
+    }
+    openChart(sig);
+  } else {
+    // Last resort: surface a tiny toast so the user knows the click was registered
+    // but the signal data isn't available locally (e.g. cleared store, race condition).
+    console.warn('[openChartForTicker] No signal data found for', ticker);
+    if (typeof setChartinkStatus === 'function') {
+      setChartinkStatus(`No cached chart data for ${ticker}. Try re-scanning.`, 'danger');
+    }
+  }
+}
+
+// Fetches fresh candle data for a ticker via the quick-scan endpoint and
+// re-renders the chart modal. Used when the cached signal is missing candles.
+async function _fetchCandlesAndRenderChart(ticker) {
+  try {
+    const resp = await fetch(`/api/ema9/quick-scan/${encodeURIComponent(ticker)}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const fresh = await resp.json();
+    if (fresh && fresh.candles && fresh.candles.length) {
+      // Merge fresh data into the in-memory cache
+      _allSignals[ticker] = { ..._allSignals[ticker], ...fresh };
+      // Re-render the chart with the fresh candles
+      openChart(_allSignals[ticker]);
+      if (typeof setChartinkStatus === 'function') {
+        setChartinkStatus(`Chart loaded for ${ticker}`, 'success');
+      }
+    } else {
+      throw new Error('No candles in quick-scan response');
+    }
+  } catch (err) {
+    console.error('[openChartForTicker] quick-scan fetch failed for', ticker, err);
+    if (typeof setChartinkStatus === 'function') {
+      setChartinkStatus(`Failed to load chart for ${ticker}: ${err.message}`, 'danger');
+    }
+  }
 }
 
 function openChart(signal) {
@@ -1787,19 +2221,23 @@ document.getElementById('chartModal').addEventListener('click', e => { if (e.tar
 // ═══════════════════════════════════════════════════════════
 
 function switchTab(tab) {
-  const screenerPanel = document.getElementById('screenerPanel');
-  const backtestPanel = document.getElementById('backtestPanel');
-  const chartinkPanel = document.getElementById('chartinkPanel');
-  const tabScreener   = document.getElementById('tabScreener');
-  const tabBacktest   = document.getElementById('tabBacktest');
-  const tabChartink   = document.getElementById('tabChartink');
+  const screenerPanel  = document.getElementById('screenerPanel');
+  const backtestPanel  = document.getElementById('backtestPanel');
+  const chartinkPanel  = document.getElementById('chartinkPanel');
+  const clauseScanPanel = document.getElementById('clauseScanPanel');
+  const tabScreener    = document.getElementById('tabScreener');
+  const tabBacktest    = document.getElementById('tabBacktest');
+  const tabChartink    = document.getElementById('tabChartink');
+  const tabClauseScan  = document.getElementById('tabClauseScan');
 
   screenerPanel.classList.add('hidden');
   backtestPanel.classList.add('hidden');
   chartinkPanel.classList.add('hidden');
+  clauseScanPanel.classList.add('hidden');
   tabScreener.classList.remove('active');
   tabBacktest.classList.remove('active');
   tabChartink.classList.remove('active');
+  tabClauseScan.classList.remove('active');
 
   if (tab === 'screener') {
     screenerPanel.classList.remove('hidden');
@@ -1811,6 +2249,11 @@ function switchTab(tab) {
     chartinkPanel.classList.remove('hidden');
     tabChartink.classList.add('active');
     fetchChartinkResults();   // immediate refresh on tab open; background polling already running
+    if (!_ckClauseOptionsLoaded) { _ckClauseOptionsLoaded = true; ckLoadClauseOptions(); }
+  } else if (tab === 'clausescan') {
+    clauseScanPanel.classList.remove('hidden');
+    tabClauseScan.classList.add('active');
+    if (!_csLoaded) { _csLoaded = true; csLoadClauses(); }
   }
 }
 
@@ -2529,6 +2972,18 @@ function _ckRenderStore() {
   const meta  = _ckLoadMeta();
   const allEntries = Object.values(store);
 
+  // ── Warm up _allSignals from the persistent store ────────────────────
+  // Without this, clicking a row on a freshly-loaded page does nothing
+  // because _allSignals is in-memory only and isn't repopulated until the
+  // next backend scan. The chart modal's openChartForTicker() needs this map.
+  if (typeof _allSignals !== 'undefined' && _allSignals) {
+    Object.values(store).forEach(sig => {
+      if (sig && sig.ticker && !_allSignals[sig.ticker]) {
+        _allSignals[sig.ticker] = sig;
+      }
+    });
+  }
+
   const nowMs     = Date.now();
   const lastScanMs = meta.last_scan_at_epoch || 0;
   const isRecent   = (nowMs - lastScanMs) < NEW_BADGE_TTL_MS;
@@ -2576,14 +3031,25 @@ function _ckRenderStore() {
   // Filtered/failed stats come from last scan (we don't accumulate those)
   document.getElementById('chartinkStatFiltered').textContent = meta.last_scan_filtered || 0;
   document.getElementById('chartinkStatFailed').textContent   = meta.last_scan_failed   || 0;
+  // FRESH crossovers (breakout happened yesterday's close, confirmed today)
+  const freshCount = allEntries.filter(s => s.is_fresh_crossover === true).length;
+  const freshEl = document.getElementById('chartinkStatFresh');
+  if (freshEl) freshEl.textContent = freshCount;
 
   // Build rows with NEW badge for this scan's batch — uses module-level _buildCkStoreRow
+
+  // Sort keys that need EXPLICIT re-sort via _sortSignalArray.
+  // Any key in this set always overrides the default isNew-then-candles_ago sort.
+  const _EXPLICIT_SORT_KEYS = new Set([
+    'gap_desc', 'gap_asc', 'price_desc', 'price_asc',
+    'fresh_first', 'initial_ema9_asc', 'initial_ema9_desc',
+  ]);
 
   if (primes.length) {
     document.getElementById('chartinkPrimeSection').classList.remove('hidden');
     document.getElementById('chartinkPrimeCount').textContent = primes.length;
-    const primeSortKey = document.getElementById('chartinkPrimeSortSelect')?.value || 'gap_desc';
-    const sortedPrimes = primeSortKey === 'gap_desc' || primeSortKey === 'gap_asc' || primeSortKey === 'price_desc' || primeSortKey === 'price_asc'
+    const primeSortKey = document.getElementById('chartinkPrimeSortSelect')?.value || 'fresh_first';
+    const sortedPrimes = _EXPLICIT_SORT_KEYS.has(primeSortKey)
       ? _sortSignalArray(primes, primeSortKey)
       : primes; // for candles sorts, the default sortFn already sorted above
     document.getElementById('chartinkPrimeTableBody').innerHTML = sortedPrimes.map(s => _buildCkStoreRow(s, true, meta)).join('');
@@ -2594,8 +3060,8 @@ function _ckRenderStore() {
   if (others.length) {
     document.getElementById('chartinkOtherSection').classList.remove('hidden');
     document.getElementById('chartinkOtherCount').textContent = others.length;
-    const otherSortKey = document.getElementById('chartinkOtherSortSelect')?.value || 'candles_asc';
-    const sortedOthers = otherSortKey === 'gap_desc' || otherSortKey === 'gap_asc' || otherSortKey === 'price_desc' || otherSortKey === 'price_asc'
+    const otherSortKey = document.getElementById('chartinkOtherSortSelect')?.value || 'fresh_first';
+    const sortedOthers = _EXPLICIT_SORT_KEYS.has(otherSortKey)
       ? _sortSignalArray(others, otherSortKey)
       : others;
     document.getElementById('chartinkOtherTableBody').innerHTML = sortedOthers.map(s => _buildCkStoreRow(s, false, meta)).join('');
@@ -2708,11 +3174,16 @@ async function runChartinkScanNow() {
   const txt     = document.getElementById('chartinkScanNowText');
   const spinner = document.getElementById('chartinkScanNowSpinner');
 
+  const selected   = Array.from(document.querySelectorAll('.ck-clause-checkbox:checked')).map(cb => cb.value);
+  const namesParam = selected.length ? `?names=${encodeURIComponent(selected.join(','))}` : '';
+
   btn.disabled = true; txt.textContent = 'Scanning...'; spinner.classList.remove('hidden');
-  setChartinkStatus('Pulling from Chartink & running screener...');
+  setChartinkStatus(selected.length
+    ? `Pulling from Chartink (${selected.join(', ')}) & running screener...`
+    : 'Pulling from Chartink & running screener...');
 
   try {
-    const resp = await fetch('/api/chartink-screener/scan-now', { method: 'POST' });
+    const resp = await fetch(`/api/chartink-screener/scan-now${namesParam}`, { method: 'POST' });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ detail: resp.statusText }));
       throw new Error(err.detail || `HTTP ${resp.status}`);
@@ -2724,6 +3195,75 @@ async function runChartinkScanNow() {
     setChartinkStatus('Error: ' + err.message, 'danger');
   } finally {
     btn.disabled = false; txt.textContent = 'Scan Now'; spinner.classList.add('hidden');
+  }
+}
+
+// ─── Active clause selector (drives Scan Now + the background scheduler) ──
+let _ckAvailableClauses     = {};   // name -> scan_clause text (from chartink_router registry)
+let _ckActiveClauseNames    = [];   // currently active/persisted selection
+let _ckClauseOptionsLoaded  = false;
+
+async function ckLoadClauseOptions() {
+  try {
+    const [clausesResp, activeResp] = await Promise.all([
+      fetch('/api/chartink/clauses'),
+      fetch('/api/chartink-screener/active-clauses'),
+    ]);
+    _ckAvailableClauses  = clausesResp.ok ? await clausesResp.json() : {};
+    const activeData     = activeResp.ok ? await activeResp.json() : { names: [] };
+    _ckActiveClauseNames = activeData.names || [];
+    ckRenderClauseCheckboxes();
+  } catch (err) {
+    setChartinkStatus('Error loading clause list: ' + err.message, 'danger');
+  }
+}
+
+function ckRenderClauseCheckboxes() {
+  const box   = document.getElementById('chartinkClauseCheckboxes');
+  const empty = document.getElementById('chartinkClauseSelectorEmpty');
+  const names = Object.keys(_ckAvailableClauses);
+
+  if (!names.length) {
+    box.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  box.innerHTML = names.map(name => {
+    const safeName = _csEscapeHtml(name);
+    const checked  = _ckActiveClauseNames.includes(name) ? 'checked' : '';
+    return `
+      <label class="flex items-center gap-1.5 cursor-pointer bg-card2 border border-border/40 rounded-lg px-2.5 py-1 hover:border-accent2/40 transition-colors">
+        <input type="checkbox" class="ck-clause-checkbox accent-accent2" value="${safeName}" ${checked} onchange="ckOnClauseSelectionChange()">
+        <span class="font-mono text-xs text-slate-300">${safeName}</span>
+      </label>`;
+  }).join('');
+}
+
+async function ckOnClauseSelectionChange() {
+  const names = Array.from(document.querySelectorAll('.ck-clause-checkbox:checked')).map(cb => cb.value);
+
+  if (!names.length) {
+    setChartinkStatus('At least one clause must stay selected — change not saved.', 'danger');
+    ckRenderClauseCheckboxes();  // revert UI to last known-good selection
+    return;
+  }
+
+  _ckActiveClauseNames = names;
+  try {
+    const resp = await fetch('/api/chartink-screener/active-clauses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ names }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    setChartinkStatus(`Active clause(s) updated: ${names.join(', ')} — applies to Scan Now and the next auto-scan`, 'success');
+  } catch (err) {
+    setChartinkStatus('Error saving clause selection: ' + err.message, 'danger');
   }
 }
 
@@ -2754,6 +3294,241 @@ function toggleChartinkFailed() {
   const ch = document.getElementById('chartinkFailedChevron');
   c.classList.toggle('hidden');
   ch.style.transform = c.classList.contains('hidden') ? '' : 'rotate(180deg)';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MULTI-CLAUSE SCANNER (Clause Scan tab)
+// ═══════════════════════════════════════════════════════════
+let _csClauses     = {};   // name -> scan_clause
+let _csEditingName = null;
+let _csLoaded      = false;
+
+function _csEscapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function csSetStatus(msg, type = 'info') {
+  const el = document.getElementById('csStatusText');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'font-mono text-xs ' + ({ info: 'text-slate-500', danger: 'text-danger', success: 'text-accent' }[type] || 'text-slate-500');
+}
+
+async function csLoadClauses() {
+  try {
+    const resp = await fetch('/api/chartink/clauses');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    _csClauses = await resp.json();
+    csRenderClauseList();
+    csSetStatus(`${Object.keys(_csClauses).length} clause(s) loaded`, 'success');
+  } catch (err) {
+    csSetStatus('Error loading clauses: ' + err.message, 'danger');
+  }
+}
+
+function csRenderClauseList() {
+  const body  = document.getElementById('csClauseListBody');
+  const empty = document.getElementById('csClauseListEmpty');
+  const names = Object.keys(_csClauses);
+
+  document.getElementById('csClauseCount').textContent = `${names.length} saved`;
+
+  if (!names.length) {
+    body.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  body.innerHTML = names.map(name => {
+    const safeName   = _csEscapeHtml(name);
+    const safeClause = _csEscapeHtml(_csClauses[name]);
+    return `
+      <div class="px-6 py-3 flex items-center gap-3 hover:bg-card2/40 transition-colors">
+        <input type="checkbox" class="cs-clause-checkbox accent-accent2 shrink-0" value="${safeName}">
+        <span class="font-mono text-sm text-slate-200 font-600 shrink-0">${safeName}</span>
+        <span class="font-mono text-xs text-slate-600 truncate flex-1" title="${safeClause}">${safeClause}</span>
+        <button onclick="csOpenEditForm('${safeName}')" class="font-mono text-xs text-accent2 hover:underline shrink-0">Edit</button>
+        <button onclick="csDeleteClause('${safeName}')" class="font-mono text-xs text-danger hover:underline shrink-0">Delete</button>
+      </div>`;
+  }).join('');
+}
+
+function csToggleSelectAll(checked) {
+  document.querySelectorAll('.cs-clause-checkbox').forEach(cb => { cb.checked = checked; });
+}
+
+function csGetSelectedNames() {
+  return Array.from(document.querySelectorAll('.cs-clause-checkbox:checked')).map(cb => cb.value);
+}
+
+function csOpenAddForm() {
+  _csEditingName = null;
+  document.getElementById('csFormTitle').textContent = 'Add New Clause';
+  document.getElementById('csClauseNameInput').value = '';
+  document.getElementById('csClauseNameInput').disabled = false;
+  document.getElementById('csClauseTextInput').value = '';
+  document.getElementById('csFormError').classList.add('hidden');
+  document.getElementById('csFormSection').classList.remove('hidden');
+  document.getElementById('csClauseNameInput').focus();
+}
+
+function csOpenEditForm(name) {
+  if (!(name in _csClauses)) return;
+  _csEditingName = name;
+  document.getElementById('csFormTitle').textContent = `Edit Clause: ${name}`;
+  document.getElementById('csClauseNameInput').value = name;
+  document.getElementById('csClauseNameInput').disabled = true; // renaming = delete + re-add, keep simple
+  document.getElementById('csClauseTextInput').value = _csClauses[name];
+  document.getElementById('csFormError').classList.add('hidden');
+  document.getElementById('csFormSection').classList.remove('hidden');
+  document.getElementById('csClauseTextInput').focus();
+}
+
+function csCancelForm() {
+  _csEditingName = null;
+  document.getElementById('csFormSection').classList.add('hidden');
+  document.getElementById('csClauseNameInput').disabled = false;
+}
+
+async function csSaveClause() {
+  const nameInput    = document.getElementById('csClauseNameInput');
+  const clauseInput  = document.getElementById('csClauseTextInput');
+  const errEl        = document.getElementById('csFormError');
+
+  const name   = nameInput.value.trim();
+  const clause = clauseInput.value.trim();
+
+  if (!name || !clause) {
+    errEl.textContent = 'Both name and scan clause are required.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const btn = document.getElementById('csSaveClauseBtn');
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/api/chartink/clauses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, scan_clause: clause }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    _csClauses = data.clauses || _csClauses;
+    csRenderClauseList();
+    csCancelForm();
+    csSetStatus(`Clause "${name}" saved`, 'success');
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function csDeleteClause(name) {
+  if (!confirm(`Delete saved clause "${name}"? This cannot be undone.`)) return;
+  try {
+    const resp = await fetch(`/api/chartink/clauses/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    _csClauses = data.clauses || {};
+    csRenderClauseList();
+    csSetStatus(`Clause "${name}" deleted`, 'success');
+  } catch (err) {
+    csSetStatus('Error deleting: ' + err.message, 'danger');
+  }
+}
+
+async function csRunSelected() {
+  const names = csGetSelectedNames();
+  if (!names.length) {
+    csSetStatus('Select at least one clause first.', 'danger');
+    return;
+  }
+
+  const btn     = document.getElementById('csRunSelectedBtn');
+  const txt     = document.getElementById('csRunSelectedText');
+  const spinner = document.getElementById('csRunSelectedSpinner');
+
+  btn.disabled = true; txt.textContent = 'Scanning...'; spinner.classList.remove('hidden');
+  csSetStatus(`Scanning ${names.length} clause(s)...`);
+
+  try {
+    const url  = `/api/chartink/scan/multi?names=${encodeURIComponent(names.join(','))}`;
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    csRenderResults(data);
+    csSetStatus(`Scan complete • ${names.length} clause(s)`, 'success');
+  } catch (err) {
+    csSetStatus('Error: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = false; txt.textContent = 'Run Selected'; spinner.classList.add('hidden');
+  }
+}
+
+function csRenderResults(data) {
+  const section = document.getElementById('csResultsSection');
+  const empty   = document.getElementById('csResultsEmpty');
+  const grid    = document.getElementById('csResultsGrid');
+  const names   = Object.keys(data);
+
+  if (!names.length) {
+    section.classList.add('hidden');
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  section.classList.remove('hidden');
+
+  grid.innerHTML = names.map(name => {
+    const r        = data[name];
+    const safeName = _csEscapeHtml(name);
+
+    if (r.error) {
+      return `
+        <div class="scan-card nodata bg-card2/40 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-mono text-sm font-600 text-slate-300">${safeName}</span>
+            <span class="font-mono text-xs px-2 py-0.5 rounded-full bg-danger/10 text-danger">error</span>
+          </div>
+          <p class="font-mono text-xs text-danger">${_csEscapeHtml(r.error)}</p>
+        </div>`;
+    }
+
+    const results = r.results || [];
+    const chips = results.length
+      ? results.map(row => `<span class="font-mono text-xs px-2 py-1 rounded bg-card2 text-slate-300">${_csEscapeHtml(row.symbol || '')}</span>`).join('')
+      : `<span class="font-mono text-xs text-slate-600">no matches</span>`;
+
+    return `
+      <div class="scan-card prime bg-card2/40 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+          <span class="font-mono text-sm font-600 text-slate-200">${safeName}</span>
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent">${r.count} hit${r.count === 1 ? '' : 's'}</span>
+            <span class="font-mono text-xs px-2 py-0.5 rounded-full ${r.cached ? 'bg-slate-700/40 text-slate-400' : 'bg-accent2/10 text-accent2'}">${r.cached ? 'cached' : 'fresh'}</span>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-1.5">${chips}</div>
+      </div>`;
+  }).join('');
 }
 
 // Chartink auto-poll starts on page load. Placed at end of script after
